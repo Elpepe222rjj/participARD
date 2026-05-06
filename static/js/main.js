@@ -197,6 +197,8 @@ if (authForm) {
 // ACTIVITIES (PUBLIC)
 // ==========================================
 
+let currentPublicActivities = [];
+
 async function fetchActivities(type = 'all') {
     try {
         let url = API_URL + '/activities';
@@ -204,6 +206,8 @@ async function fetchActivities(type = 'all') {
         
         const res = await fetch(url);
         const activities = await res.json();
+        
+        currentPublicActivities = activities;
         
         // Populate Hero Mockups dynamically
         if (activities.length > 0 && type === 'all') {
@@ -246,69 +250,100 @@ async function fetchActivities(type = 'all') {
             }
         }
 
-        const grid = document.getElementById('activities-grid');
-        if (!grid) return;
-        
-        grid.innerHTML = '';
-        
-        activities.forEach(act => {
-            const date = new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
-            
-            let actionHtml = '';
-            if (!currentUser || currentUser.role === 'Rol_Estudiantes') {
-                actionHtml = `
-                <div class="mt-6 pt-4 border-t border-white/10">
-                    <button onclick="enrollActivity(${act.id})" class="w-full btn-premium py-2.5 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white border border-emerald-500/30 rounded-xl font-bold transition-all flex justify-center items-center gap-2">
-                        <i data-lucide="check-circle" class="w-4 h-4"></i>
-                        Inscribirme ahora
-                    </button>
-                </div>`;
-            }
-
-            grid.innerHTML += `
-                <div class="glass-card flex flex-col h-full rounded-2xl overflow-hidden group">
-                    ${act.image_url ? `
-                    <div class="h-48 w-full relative overflow-hidden shrink-0">
-                        <img src="${act.image_url}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="${act.title}">
-                        <div class="absolute inset-0 bg-gradient-to-t from-[#080d1a] via-transparent to-black/30"></div>
-                    </div>` : ''}
-                    <div class="p-6 flex-1 flex flex-col relative z-10 ${act.image_url ? '-mt-20' : ''}">
-                        <div class="flex justify-between items-start mb-4">
-                            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${act.image_url ? 'bg-black/40 backdrop-blur-md border border-white/20 text-emerald-300' : 'bg-white/5 border border-white/10 text-emerald-400'} text-xs font-bold uppercase tracking-wider shadow-inner">
-                                <i data-lucide="tag" class="w-3 h-3"></i>
-                                ${act.type_id}
-                            </div>
-                            <div class="px-2 py-1 rounded ${act.image_url ? 'bg-black/40 backdrop-blur-md border border-white/20 text-white/90' : 'bg-white/5 text-white/50 border border-white/5'} text-xs font-medium flex items-center gap-1">
-                                <i data-lucide="map-pin" class="w-3 h-3"></i>
-                                ${act.province}
-                            </div>
-                        </div>
-                        <h3 class="text-xl font-extrabold text-white mb-3 group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug">${act.title}</h3>
-                        <p class="text-white/60 text-sm mb-6 flex-1 line-clamp-3 leading-relaxed">${act.description}</p>
-                        
-                        <div class="space-y-3 mt-auto bg-white/5 p-4 rounded-xl border border-white/5">
-                            <div class="flex items-center gap-3 text-white/70 text-sm">
-                                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
-                                    <i data-lucide="building" class="w-4 h-4 text-emerald-400"></i>
-                                </div>
-                                <span class="truncate font-medium">${act.institution_name}</span>
-                            </div>
-                            <div class="flex items-center gap-3 text-white/70 text-sm">
-                                <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
-                                    <i data-lucide="calendar" class="w-4 h-4 text-emerald-400"></i>
-                                </div>
-                                <span class="font-medium">Cierre: ${date}</span>
-                            </div>
-                        </div>
-                        ${actionHtml}
-                    </div>
-                </div>
-            `;
-        });
-        if (window.lucide) window.lucide.createIcons();
+        renderActivitiesGrid();
     } catch (err) {
         console.error(err);
     }
+}
+
+function renderActivitiesGrid() {
+    const grid = document.getElementById('activities-grid');
+    if (!grid) return;
+    
+    const searchInput = document.getElementById('search-activities');
+    const searchQuery = searchInput ? searchInput.value.toLowerCase() : '';
+    
+    grid.innerHTML = '';
+    
+    const filteredActivities = currentPublicActivities.filter(act => {
+        if (!searchQuery) return true;
+        return act.title.toLowerCase().includes(searchQuery) || 
+               (act.institution_name && act.institution_name.toLowerCase().includes(searchQuery)) ||
+               (act.province && act.province.toLowerCase().includes(searchQuery)) ||
+               (act.type_id && act.type_id.toLowerCase().includes(searchQuery));
+    });
+    
+    if (filteredActivities.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-center text-white/50 py-12">No se encontraron actividades que coincidan con tu búsqueda.</div>';
+        return;
+    }
+    
+    filteredActivities.forEach(act => {
+        const date = new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+        
+        const showAction = !currentUser || currentUser.role === 'Rol_Estudiantes';
+        const actionHtml = showAction ? `
+            <div class="mt-6 pt-4 border-t border-white/10">
+                <button data-open-modal="${act.id}" class="ver-mas-btn w-full btn-premium py-2.5 bg-transparent hover:bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/50 rounded-xl font-bold transition-all flex justify-center items-center gap-2">
+                    <i data-lucide="eye" class="w-4 h-4"></i>
+                    Ver más
+                </button>
+            </div>` : '';
+
+        const card = document.createElement('div');
+        card.className = 'glass-card flex flex-col h-full rounded-2xl overflow-hidden group cursor-pointer hover:shadow-[0_0_30px_rgba(16,185,129,0.1)] transition-all';
+        card.dataset.activityId = act.id;
+        card.innerHTML = `
+            ${act.image_url ? `
+            <div class="h-48 w-full relative overflow-hidden shrink-0">
+                <img src="${act.image_url}" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="${act.title}">
+                <div class="absolute inset-0 bg-gradient-to-t from-[#080d1a] via-transparent to-black/30"></div>
+            </div>` : ''}
+            <div class="p-6 flex-1 flex flex-col relative z-10 ${act.image_url ? '-mt-20' : ''}">
+                <div class="flex justify-between items-start mb-4">
+                    <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${act.image_url ? 'bg-black/40 backdrop-blur-md border border-white/20 text-emerald-300' : 'bg-white/5 border border-white/10 text-emerald-400'} text-xs font-bold uppercase tracking-wider shadow-inner">
+                        <i data-lucide="tag" class="w-3 h-3"></i>
+                        ${act.type_id}
+                    </div>
+                    <div class="px-2 py-1 rounded ${act.image_url ? 'bg-black/40 backdrop-blur-md border border-white/20 text-white/90' : 'bg-white/5 text-white/50 border border-white/5'} text-xs font-medium flex items-center gap-1">
+                        <i data-lucide="map-pin" class="w-3 h-3"></i>
+                        ${act.province}
+                    </div>
+                </div>
+                <h3 class="text-xl font-extrabold text-white mb-3 group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug">${act.title}</h3>
+                <p class="text-white/60 text-sm mb-6 flex-1 line-clamp-3 leading-relaxed">${act.description}</p>
+                <div class="space-y-3 mt-auto bg-white/5 p-4 rounded-xl border border-white/5">
+                    <div class="flex items-center gap-3 text-white/70 text-sm">
+                        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                            <i data-lucide="building" class="w-4 h-4 text-emerald-400"></i>
+                        </div>
+                        <span class="truncate font-medium">${act.institution_name}</span>
+                    </div>
+                    <div class="flex items-center gap-3 text-white/70 text-sm">
+                        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                            <i data-lucide="calendar" class="w-4 h-4 text-emerald-400"></i>
+                        </div>
+                        <span class="font-medium">Cierre: ${date}</span>
+                    </div>
+                </div>
+                ${actionHtml}
+            </div>
+        `;
+
+        grid.appendChild(card);
+    });
+
+    // Attach 'Ver más' button events after all cards are in DOM
+    grid.querySelectorAll('.ver-mas-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            const id = this.dataset.openModal;
+            openPublicActivityModal(id);
+        });
+    });
+
+    if (window.lucide) window.lucide.createIcons();
 }
 
 function filterActivities(type) {
@@ -317,12 +352,16 @@ function filterActivities(type) {
 
 async function enrollActivity(activityId) {
     if (!currentUser) {
-        toggleAuthModal(true);
-        const subtitle = document.getElementById('auth-subtitle');
-        if (subtitle) {
-            subtitle.innerText = "Debes iniciar sesión para poder inscribirte en esta actividad.";
-            subtitle.classList.add("text-emerald-400"); // Resaltar mensaje
-        }
+        // Close activity modal first, then show login
+        closePublicActivityModal();
+        setTimeout(() => {
+            toggleAuthModal(true);
+            const subtitle = document.getElementById('auth-subtitle');
+            if (subtitle) {
+                subtitle.innerText = "Debes iniciar sesión para poder inscribirte en esta actividad.";
+                subtitle.classList.add("text-emerald-400");
+            }
+        }, 200);
         return;
     }
     
@@ -343,6 +382,7 @@ async function enrollActivity(activityId) {
         if (!res.ok) throw new Error(data.error);
         
         alert("¡Inscripción exitosa! Te hemos registrado en la actividad.");
+        closePublicActivityModal();
     } catch (err) {
         if(err.message.includes('PRIMARY KEY') || err.message.includes('UNIQUE')) {
              alert("Ya estás inscrito en esta actividad.");
@@ -350,6 +390,49 @@ async function enrollActivity(activityId) {
              alert(err.message || "Ocurrió un error al inscribirte.");
         }
     }
+}
+
+function openPublicActivityModal(activityId) {
+    const act = currentPublicActivities.find(a => String(a.id) === String(activityId));
+    if (!act) {
+        console.error('Activity not found:', activityId, currentPublicActivities);
+        return;
+    }
+
+    document.getElementById('public-activity-title').innerText = act.title;
+    document.getElementById('public-activity-desc').innerText = act.description;
+    document.getElementById('public-activity-type').innerHTML = act.type_id;
+    document.getElementById('public-activity-province').innerHTML = act.province;
+    document.getElementById('public-activity-inst').innerText = act.institution_name || 'Desconocida';
+    
+    const dateStr = new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+    document.getElementById('public-activity-date').innerText = dateStr;
+
+    const imgContainer = document.getElementById('public-activity-image-container');
+    const imgEl = document.getElementById('public-activity-image');
+    if (act.image_url) {
+        imgEl.src = act.image_url;
+        imgContainer.classList.remove('hidden');
+    } else {
+        imgEl.src = '';
+        imgContainer.classList.add('hidden');
+    }
+
+    // Wire up enroll button — clone to remove any stale listeners, then remove onclick attr
+    const enrollBtn = document.getElementById('public-activity-enroll-btn');
+    if (enrollBtn) {
+        const newBtn = enrollBtn.cloneNode(true);
+        newBtn.removeAttribute('onclick'); // prevent any stale onclick firing
+        enrollBtn.parentNode.replaceChild(newBtn, enrollBtn);
+        newBtn.addEventListener('click', () => enrollActivity(act.id));
+    }
+
+    document.getElementById('public-activity-modal').classList.remove('hidden');
+    if (window.lucide) window.lucide.createIcons();
+}
+
+function closePublicActivityModal() {
+    document.getElementById('public-activity-modal').classList.add('hidden');
 }
 
 // ==========================================
@@ -398,48 +481,70 @@ async function loadAdminData() {
     document.getElementById('admin-name').innerText = currentUser.fullName;
 
     try {
-        const [usersRes, actRes, instRes] = await Promise.all([
+        const [usersRes, actRes, instRes, recentRes] = await Promise.all([
             fetch(API_URL + '/users'),
-            fetch(API_URL + '/activities'),
-            fetch(API_URL + '/institutions')
+            fetch(API_URL + '/activities?all=true'),
+            fetch(API_URL + '/institutions'),
+            fetch(API_URL + '/recent_activity')
         ]);
         
         const users = await usersRes.json();
         const activities = await actRes.json();
         adminInstitutions = await instRes.json();
+        const recentActivity = await recentRes.json();
         
         document.getElementById('stat-users').innerText = users.length;
         document.getElementById('stat-activities').innerText = activities.length;
         
         renderAdminChart(users);
+        renderRecentActivity(recentActivity);
+        renderRolesPermissions(users);
         
-        // Fill Users Table
-        const usersList = document.getElementById('admin-users-list');
-        usersList.innerHTML = users.map(u => `
-            <tr>
-                <td class="px-6 py-4 text-sm text-white">${u.full_name}</td>
-                <td class="px-6 py-4 text-sm text-white/70">${u.email}</td>
-                <td class="px-6 py-4 text-sm text-emerald-400">${u.role}</td>
-                <td class="px-6 py-4 text-right flex justify-end gap-2">
-                    <button onclick='openEditUserModal(${JSON.stringify(u).replace(/'/g, "&#39;")})' class="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-                    <button onclick="deleteUser('${u.id}')" class="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                </td>
-            </tr>
-        `).join('');
+        // Update User Stats
+        const totalUsers = users.length;
+        const activeUsers = users.length; // Assuming all users are active for now
+        
+        let userAdmins = 0, userEditors = 0, userStudents = 0;
+        let newUsersThisMonth = 0;
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
 
-        // Fill Activities Table
-        const actList = document.getElementById('admin-activities-list');
-        actList.innerHTML = activities.map(a => `
-            <tr>
-                <td class="px-6 py-4 text-sm text-white font-medium max-w-[200px] truncate">${a.title}</td>
-                <td class="px-6 py-4 text-sm"><span class="px-2 py-1 bg-white/10 rounded text-white/70">${a.type_id}</span></td>
-                <td class="px-6 py-4 text-sm text-white/70">${a.end_date.split('T')[0]}</td>
-                <td class="px-6 py-4 text-right flex justify-end gap-2">
-                    <button onclick='editActivity(${JSON.stringify(a).replace(/'/g, "&#39;")})' class="p-2 text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all"><i data-lucide="edit-2" class="w-4 h-4"></i></button>
-                    <button onclick="deleteActivity(${a.id})" class="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                </td>
-            </tr>
-        `).join('');
+        users.forEach(u => {
+            if (u.role === 'Rol_Administradores') userAdmins++;
+            else if (u.role === 'Rol_Editores') userEditors++;
+            else userStudents++;
+
+            if (u.created_at) {
+                const dateObj = new Date(u.created_at);
+                if (dateObj.getMonth() === currentMonth && dateObj.getFullYear() === currentYear) {
+                    newUsersThisMonth++;
+                }
+            }
+        });
+
+        const statTotal = document.getElementById('user-stat-total');
+        if (statTotal) statTotal.innerText = totalUsers;
+        const statNew = document.getElementById('user-stat-new');
+        if (statNew) statNew.innerText = newUsersThisMonth > 0 ? `↑ ${newUsersThisMonth} este mes` : 'Sin nuevos este mes';
+        
+        const statActive = document.getElementById('user-stat-active');
+        if (statActive) statActive.innerText = activeUsers;
+        const statActivePct = document.getElementById('user-stat-active-pct');
+        if (statActivePct) statActivePct.innerText = totalUsers > 0 ? `${Math.round((activeUsers/totalUsers)*100)}% del total` : '0% del total';
+
+        const statRoles = document.getElementById('user-stat-roles');
+        if (statRoles) statRoles.innerText = (userAdmins>0?1:0) + (userEditors>0?1:0) + (userStudents>0?1:0);
+
+        // Initialize Users Table and Search
+        window.allAdminUsers = users;
+        renderAdminUsersTable(users);
+        setupUserSearch();
+
+        // Initialize Admin Activities Table and Stats
+        window.allAdminActivities = activities;
+        renderAdminActivitiesStats(activities);
+        renderAdminActivitiesTable(activities);
+        setupActivityFilters();
         
         // Fill Activity Types Datalist dynamically
         const uniqueTypes = [...new Set(activities.map(a => a.type_id))];
@@ -456,6 +561,92 @@ async function loadAdminData() {
     } catch (err) {
         console.error(err);
     }
+}
+
+function renderAdminUsersTable(usersToRender) {
+    const usersList = document.getElementById('admin-users-list');
+    if (!usersList) return;
+    
+    if (usersToRender.length === 0) {
+        usersList.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-white/50 text-sm">No se encontraron usuarios que coincidan con la búsqueda.</td></tr>';
+    } else {
+        usersList.innerHTML = usersToRender.map(u => {
+            let bgAvatar = '', textAvatar = '', bgBadge = '', textBadge = '', roleDisplay = '';
+            if (u.role === 'Rol_Estudiantes') {
+                bgAvatar = 'bg-[#0f3b30]'; textAvatar = 'text-[#34d399]';
+                bgBadge = 'bg-[#0f3b30] text-[#34d399]';
+                roleDisplay = 'Estudiante';
+            } else if (u.role === 'Rol_Editores') {
+                bgAvatar = 'bg-[#1a3048]'; textAvatar = 'text-[#60a5fa]';
+                bgBadge = 'bg-[#1a3048] text-[#60a5fa]';
+                roleDisplay = 'Editor';
+            } else {
+                bgAvatar = 'bg-[#2d1f4e]'; textAvatar = 'text-[#a78bfa]';
+                bgBadge = 'bg-[#2d1f4e] text-[#a78bfa]';
+                roleDisplay = 'Administrador';
+            }
+
+            const initials = u.full_name ? (u.full_name.substring(0, 2).toUpperCase()) : 'US';
+            const dateStr = u.created_at ? new Date(u.created_at).toLocaleDateString('es-ES', { month: 'short', year: 'numeric' }) : '';
+            
+            return `
+            <tr class="hover:bg-white/5 transition-colors group">
+                <td class="px-4 py-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full ${bgAvatar} ${textAvatar} flex items-center justify-center text-[11px] font-bold shrink-0 shadow-inner border border-white/5">${initials}</div>
+                        <div class="flex flex-col">
+                            <span class="text-[13px] text-white font-medium">${u.full_name}</span>
+                            <span class="text-[11px] text-white/40">Desde ${dateStr}</span>
+                        </div>
+                    </div>
+                </td>
+                <td class="px-4 py-3 text-[13px] text-white/70">${u.email}</td>
+                <td class="px-4 py-3">
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-medium ${bgBadge} border border-white/5">${roleDisplay}</span>
+                </td>
+                <td class="px-4 py-3 text-[12px] text-white/40">Reciente</td>
+                <td class="px-4 py-3 text-right">
+                    <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onclick='openEditUserModal(${JSON.stringify(u).replace(/'/g, "&#39;")})' class="p-1.5 text-white/50 hover:text-white bg-[#111827] border border-white/10 rounded-md transition-all hover:bg-white/10" title="Editar">
+                            <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button onclick="deleteUser('${u.id}')" class="p-1.5 text-red-400 hover:text-red-300 bg-[#111827] border border-white/10 rounded-md transition-all hover:border-red-900/50 hover:bg-red-900/20" title="Eliminar">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            `;
+        }).join('');
+    }
+    
+    if (window.lucide) window.lucide.createIcons();
+    
+    const pagInfo = document.getElementById('user-pagination-info');
+    if (pagInfo) pagInfo.innerText = `Mostrando ${usersToRender.length} usuarios`;
+}
+
+function setupUserSearch() {
+    const searchInput = document.getElementById('user-search-input');
+    if (!searchInput) return;
+    
+    // Eliminar event listener anterior clonándolo
+    const newSearchInput = searchInput.cloneNode(true);
+    searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+    
+    newSearchInput.addEventListener('input', (e) => {
+        const query = e.target.value.toLowerCase();
+        if (!window.allAdminUsers) return;
+        
+        const filtered = window.allAdminUsers.filter(u => {
+            const roleStr = u.role === 'Rol_Estudiantes' ? 'estudiante' : (u.role === 'Rol_Editores' ? 'editor' : 'administrador');
+            return (u.full_name && u.full_name.toLowerCase().includes(query)) ||
+                   (u.email && u.email.toLowerCase().includes(query)) ||
+                   roleStr.includes(query);
+        });
+        
+        renderAdminUsersTable(filtered);
+    });
 }
 
 // Cloudinary Integration
@@ -541,7 +732,8 @@ if (actForm) {
             FechaCierre: document.getElementById('act-date').value,
             Localidad: document.getElementById('act-location').value,
             InstitucionNombre: document.getElementById('act-institution').value,
-            ImagenURL: document.getElementById('act-image').value || null
+            ImagenURL: document.getElementById('act-image').value || null,
+            modifier: currentUser.fullName || 'Sistema'
         };
 
         const method = id ? 'PUT' : 'POST';
@@ -570,7 +762,8 @@ async function deleteActivity(id) {
 
 async function deleteUser(id) {
     if(confirm('¿Seguro que deseas eliminar este usuario?')) {
-        await fetch(`${API_URL}/users/${id}`, { method: 'DELETE' });
+        const modifier = currentUser ? currentUser.fullName : 'Sistema';
+        await fetch(`${API_URL}/users/${id}?modifier=${encodeURIComponent(modifier)}`, { method: 'DELETE' });
         loadAdminData();
     }
 }
@@ -684,12 +877,133 @@ function renderAdminChart(users) {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'bottom',
-                    labels: { color: 'rgba(255, 255, 255, 0.7)' }
+                    position: 'right',
+                    labels: { color: 'rgba(255, 255, 255, 0.7)', padding: 20 }
                 }
             }
         }
     });
+}
+
+function renderRecentActivity(recentActivity) {
+    const listEl = document.getElementById('recent-activity-list');
+    if (!listEl) return;
+    
+    if (!recentActivity || recentActivity.length === 0) {
+        listEl.innerHTML = '<p class="text-white/50 text-sm">No hay actividad reciente.</p>';
+        return;
+    }
+    
+    let html = '';
+    
+    recentActivity.forEach(act => {
+        let color = 'emerald';
+        let initials = 'U';
+        let title = '';
+        let desc = '';
+        
+        if (act.type === 'user') {
+            color = 'blue';
+            initials = 'US';
+            title = 'Nuevo usuario creado';
+            desc = `${act.name} (${act.role})`;
+        } else if (act.type === 'activity') {
+            if (act.action === 'USUARIO ELIMINADO') {
+                color = 'red';
+                initials = 'UE';
+                title = 'Usuario eliminado';
+                desc = act.user; // We stored the 'Name (por Modifier)' in the user field
+            } else {
+                color = act.action === 'CREADA' ? 'emerald' : (act.action === 'EDITADA' ? 'amber' : 'red');
+                initials = act.action === 'CREADA' ? 'CR' : (act.action === 'EDITADA' ? 'ED' : 'EL');
+                title = `Actividad ${act.action.toLowerCase()}`;
+                desc = `${act.title} (por ${act.user})`;
+            }
+        }
+        
+        // Formatear la fecha
+        let timeLabel = '';
+        if (act.date) {
+            const dateObj = new Date(act.date);
+            const today = new Date();
+            const diffTime = Math.abs(today - dateObj);
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays === 0) timeLabel = 'Hoy';
+            else if (diffDays === 1) timeLabel = 'Ayer';
+            else timeLabel = `Hace ${diffDays} días`;
+        }
+        
+        html += `
+            <div class="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-${color}-500/20 text-${color}-400 flex items-center justify-center font-bold text-sm border border-${color}-500/30">
+                        ${initials}
+                    </div>
+                    <div>
+                        <p class="text-white text-sm font-medium">${title}</p>
+                        <p class="text-white/50 text-xs">${desc}</p>
+                    </div>
+                </div>
+                <span class="text-white/30 text-xs">${timeLabel}</span>
+            </div>
+        `;
+    });
+    
+    listEl.innerHTML = html;
+}
+
+
+
+function renderRolesPermissions(users) {
+    const listEl = document.getElementById('roles-permissions-list');
+    if (!listEl) return;
+    
+    let admins = 0, editores = 0, estudiantes = 0;
+    users.forEach(u => {
+        if (u.role === 'Rol_Administradores') admins++;
+        else if (u.role === 'Rol_Editores') editores++;
+        else estudiantes++;
+    });
+    
+    const roles = [
+        { name: 'Administrador', count: admins, access: 'Acceso total', color: 'purple', bg: 'purple-500/20', border: 'purple-500/30', text: 'purple-400' },
+        { name: 'Editor', count: editores, access: 'Lectura + edición', color: 'blue', bg: 'blue-500/20', border: 'blue-500/30', text: 'blue-400' },
+        { name: 'Estudiante', count: estudiantes, access: 'Solo lectura', color: 'emerald', bg: 'emerald-500/20', border: 'emerald-500/30', text: 'emerald-400' }
+    ];
+    
+    let html = '';
+    roles.forEach(r => {
+        html += `
+            <div class="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
+                <div class="flex items-center gap-3">
+                    <span class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-${r.color}-500/20 text-${r.color}-400 border border-${r.color}-500/30">
+                        ${r.name}
+                    </span>
+                    <span class="text-white/60 text-xs">${r.count} usuario${r.count !== 1 ? 's' : ''}</span>
+                </div>
+                <span class="text-white/40 text-xs">${r.access}</span>
+            </div>
+        `;
+    });
+    
+    listEl.innerHTML = html;
+    
+    const lastChangeEl = document.getElementById('last-role-change');
+    if (lastChangeEl && users.length > 0) {
+        const sortedUsers = [...users].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        const latestDate = new Date(sortedUsers[0].created_at);
+        const today = new Date();
+        const diffTime = Math.abs(today - latestDate);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        
+        let timeLabel = '';
+        if (diffDays === 0) timeLabel = 'hoy';
+        else if (diffDays === 1) timeLabel = 'hace 1 día';
+        else timeLabel = `hace ${diffDays} días`;
+        
+        lastChangeEl.innerText = `Último cambio de rol: ${timeLabel} - por el sistema`;
+    }
 }
 
 // ==========================================
@@ -728,6 +1042,159 @@ function initParticles() {
         el.style.filter = 'blur(1.5px)';
         container.appendChild(el);
     }
+}
+
+// ==========================================
+// ADMIN ACTIVITIES TAB LOGIC
+// ==========================================
+
+function renderAdminActivitiesStats(activities) {
+    const totalEl = document.getElementById('act-stat-total');
+    const proxEl = document.getElementById('act-stat-prox');
+    const proxDaysEl = document.getElementById('act-stat-prox-days');
+
+    if (!totalEl || !proxEl) return;
+
+    totalEl.innerText = activities.length;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const upcoming = activities
+        .map(a => ({ ...a, dateObj: new Date(a.end_date) }))
+        .filter(a => a.dateObj >= today)
+        .sort((a, b) => a.dateObj - b.dateObj);
+
+    if (upcoming.length > 0) {
+        const next = upcoming[0];
+        const options = { day: '2-digit', month: 'short' };
+        proxEl.innerText = next.dateObj.toLocaleDateString('es-ES', options);
+        
+        const diffTime = Math.abs(next.dateObj - today);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        proxDaysEl.innerText = diffDays === 0 ? 'hoy' : `en ${diffDays} días`;
+    } else {
+        proxEl.innerText = '-';
+        proxDaysEl.innerText = 'sin actividades futuras';
+    }
+}
+
+function renderAdminActivitiesTable(activities) {
+    const actList = document.getElementById('admin-activities-list');
+    if (!actList) return;
+
+    if (activities.length === 0) {
+        actList.innerHTML = '<tr><td colspan="5" class="px-6 py-8 text-center text-white/50 text-sm">No se encontraron actividades.</td></tr>';
+        lucide.createIcons();
+        return;
+    }
+
+    const today = new Date();
+
+    actList.innerHTML = activities.map(a => {
+        // Calculate creation time ago
+        let createdTimeLabel = 'N/A';
+        if (a.created_at) {
+            const dateObj = new Date(a.created_at);
+            const diffTime = Math.abs(today - dateObj);
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            if (diffDays === 0) createdTimeLabel = 'Hoy';
+            else if (diffDays === 1) createdTimeLabel = 'Ayer';
+            else createdTimeLabel = `Hace ${diffDays} días`;
+        }
+
+        const dateObj = new Date(a.end_date);
+        const isClosed = dateObj < today;
+        const typeNormalized = a.type_id.toLowerCase();
+        
+        let typeColor = 'blue';
+        if (typeNormalized.includes('beca')) typeColor = 'blue';
+        else if (typeNormalized.includes('olimp')) typeColor = 'purple';
+        else typeColor = 'emerald';
+
+        const creator = a.created_by || 'administrador';
+        const creatorInitials = creator.substring(0, 2).toUpperCase();
+
+        const rowHtml = `
+            <tr class="hover:bg-white/5 transition-colors border-b border-white/5 last:border-0">
+                <td class="px-6 py-4">
+                    <p class="text-sm font-semibold text-white truncate max-w-[200px]">${a.title}</p>
+                    <p class="text-[10px] text-white/40 mt-1">Creada ${createdTimeLabel.toLowerCase()}</p>
+                </td>
+                <td class="px-6 py-4">
+                    <span class="inline-flex px-3 py-1 bg-${typeColor}-500/20 text-${typeColor}-400 border border-${typeColor}-500/30 rounded-full text-[10px] uppercase font-bold tracking-wider">
+                        ${a.type_id}
+                    </span>
+                </td>
+                <td class="px-6 py-4 text-sm ${isClosed ? 'text-white/30' : 'text-white/80'}">
+                    ${dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </td>
+                <td class="px-6 py-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-6 h-6 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-[10px] font-bold text-purple-400">
+                            ${creatorInitials}
+                        </div>
+                        <span class="text-xs text-white/60 truncate max-w-[100px]">${creator}</span>
+                    </div>
+                </td>
+                <td class="px-6 py-4">
+                    <div class="flex justify-end items-center gap-1">
+                        <button onclick='editActivity(${JSON.stringify(a).replace(/'/g, "&#39;")})' class="p-2 text-amber-400 hover:bg-amber-500/10 rounded-lg transition-all" title="Editar">
+                            <i data-lucide="edit-2" class="w-4 h-4"></i>
+                        </button>
+                        <button onclick="deleteActivity(${a.id})" class="p-2 text-red-400 hover:bg-red-500/10 rounded-lg transition-all" title="Eliminar">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        return rowHtml;
+    }).join('');
+
+    lucide.createIcons();
+}
+
+function setupActivityFilters() {
+    const searchInput = document.getElementById('activity-search-input');
+    const filterSelect = document.getElementById('activity-filter-select');
+    
+    if (!searchInput || !filterSelect || !window.allAdminActivities) return;
+
+    // Populate the select dynamically
+    const uniqueTypes = [...new Set(window.allAdminActivities.map(a => a.type_id))];
+    let selectHtml = '<option class="bg-[#0a0f1e]" value="all">Todas las categorías</option>';
+    uniqueTypes.forEach(type => {
+        selectHtml += `<option class="bg-[#0a0f1e]" value="${type}">${type}</option>`;
+    });
+    filterSelect.innerHTML = selectHtml;
+
+    // Remove old listeners to prevent duplicates
+    const newSearchInput = searchInput.cloneNode(true);
+    searchInput.parentNode.replaceChild(newSearchInput, searchInput);
+    
+    const newFilterSelect = filterSelect.cloneNode(true);
+    filterSelect.parentNode.replaceChild(newFilterSelect, filterSelect);
+
+    const applyFilters = () => {
+        if (!window.allAdminActivities) return;
+        
+        const query = newSearchInput.value.toLowerCase();
+        const currentFilter = newFilterSelect.value.toLowerCase();
+        
+        let filtered = window.allAdminActivities.filter(a => {
+            const matchesSearch = a.title.toLowerCase().includes(query) || a.type_id.toLowerCase().includes(query);
+            if (!matchesSearch) return false;
+            
+            if (currentFilter === 'all') return true;
+            return a.type_id.toLowerCase() === currentFilter;
+        });
+
+        renderAdminActivitiesTable(filtered);
+    };
+    
+    newSearchInput.addEventListener('input', applyFilters);
+    newFilterSelect.addEventListener('change', applyFilters);
 }
 
 // ==========================================

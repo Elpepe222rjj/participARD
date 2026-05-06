@@ -173,6 +173,8 @@ def get_activities():
         province = request.args.get('province')
         type_id = request.args.get('type')
         
+        fetch_all = request.args.get('all')
+        
         query = """
             SELECT a.ActividadID as id, a.Titulo as title, a.Descripcion as description, 
                    a.Tipo as type_id, a.FechaCierre as end_date, 
@@ -180,12 +182,22 @@ def get_activities():
                    'Activa' as status,
                    ISNULL(a.Localidad, 'No especificada') as location,
                    ISNULL(a.Provincia, 'N/A') as province,
-                   a.ImagenURL as image_url
+                   a.ImagenURL as image_url,
+                   aud.UsuarioModificador as created_by,
+                   aud.FechaModificacion as created_at
             FROM tblActividades a
             JOIN tblInstituciones i ON a.InstitucionID = i.InstitucionID
-            WHERE a.FechaCierre >= GETDATE()
+            OUTER APPLY (
+                SELECT TOP 1 UsuarioModificador, FechaModificacion
+                FROM tblAuditoria_Actividades
+                WHERE ActividadID = a.ActividadID AND Accion = 'CREADA'
+                ORDER BY FechaModificacion ASC
+            ) aud
+            WHERE 1=1
         """
         params = []
+        if not fetch_all:
+            query += " AND a.FechaCierre >= GETDATE()"
         if province:
             query += " AND a.Provincia = ?"
             params.append(province)
@@ -237,7 +249,7 @@ def get_institutions():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT InstitucionID as id, Nombre as name FROM tblInstituciones')
+        cursor.execute("SELECT InstitucionID as id, Nombre as name FROM tblInstituciones")
         columns = [column[0] for column in cursor.description]
         results = [dict(zip(columns, row)) for row in cursor.fetchall()]
         conn.close()
@@ -245,6 +257,38 @@ def get_institutions():
     except Exception as e:
         print(f"[ERROR Get Institutions]: {e}")
         return jsonify({"error": "Error obteniendo instituciones."}), 500
+
+@app.route('/api/enrollments', methods=['POST'])
+def enroll():
+    data = request.json
+    user_id = data.get('user_id')
+    activity_id = data.get('activity_id')
+    
+    if not user_id or not activity_id:
+        return jsonify({"error": "Faltan datos de inscripción."}), 400
+        
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Check if already enrolled
+        cursor.execute("SELECT 1 FROM tblInscripciones WHERE UsuarioID = ? AND ActividadID = ?", (user_id, activity_id))
+        if cursor.fetchone():
+            conn.close()
+            return jsonify({"error": "UNIQUE"}), 400
+            
+        cursor.execute(
+            "INSERT INTO tblInscripciones (UsuarioID, ActividadID, FechaInscripcion, EstadoInscripcion) VALUES (?, ?, GETDATE(), 'Activa')",
+            (user_id, activity_id)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Inscripción exitosa"}), 201
+    except pyodbc.IntegrityError:
+        return jsonify({"error": "PRIMARY KEY"}), 400
+    except Exception as e:
+        print(f"[ERROR Enrollment]: {e}")
+        return jsonify({"error": "Error interno al procesar inscripción."}), 500
 
 @app.route('/api/activities', methods=['POST'])
 def create_activity():
@@ -271,6 +315,12 @@ def create_activity():
         """, (data.get('Titulo'), data.get('Descripcion'), data.get('Tipo'), data.get('FechaCierre'), inst_id, data.get('Localidad'), None, data.get('ImagenURL')))
         
         new_activity_id = cursor.fetchone()[0]
+        
+        cursor.execute("""
+            INSERT INTO tblAuditoria_Actividades (ActividadID, Accion, UsuarioModificador)
+            VALUES (?, 'CREADA', ?)
+        """, (new_activity_id, data.get('modifier', 'Sistema')))
+        
         conn.commit()
 
         # Obtener correos de estudiantes
@@ -325,6 +375,12 @@ def update_activity(id):
             WHERE ActividadID=?
         """, (data.get('Titulo'), data.get('Descripcion'), data.get('Tipo'), data.get('FechaCierre'), 
               data.get('Localidad'), None, inst_id, data.get('ImagenURL'), id))
+              
+        cursor.execute("""
+            INSERT INTO tblAuditoria_Actividades (ActividadID, Accion, UsuarioModificador)
+            VALUES (?, 'EDITADA', ?)
+        """, (id, data.get('modifier', 'Sistema')))
+        
         conn.commit()
         conn.close()
         return jsonify({"message": "Actividad actualizada"}), 200
@@ -373,7 +429,21 @@ def delete_user(id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+        
+        # Get user's name before deleting
+        cursor.execute("SELECT FullName FROM tblUsuarios WHERE UsuarioID=?", (id,))
+        row = cursor.fetchone()
+        deleted_name = row[0] if row else 'Usuario Desconocido'
+        
         cursor.execute('DELETE FROM tblInscripciones WHERE UsuarioID=?; DELETE FROM tblUsuarios WHERE UsuarioID=?;', (id, id))
+        
+        # Log the deletion
+        modifier = request.args.get('modifier', 'Sistema')
+        cursor.execute("""
+            INSERT INTO tblAuditoria_Actividades (ActividadID, Accion, UsuarioModificador)
+            VALUES (NULL, 'USUARIO ELIMINADO', ?)
+        """, (f"{deleted_name} (por {modifier})",))
+        
         conn.commit()
         conn.close()
         return jsonify({"message": "Usuario eliminado"}), 200
@@ -381,20 +451,54 @@ def delete_user(id):
         print(e)
         return jsonify({"error": "Error eliminando usuario"}), 500
 
-@app.route('/api/enrollments', methods=['POST'])
-def enroll():
-    data = request.json
+
+@app.route('/api/recent_activity', methods=['GET'])
+def get_recent_activity():
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('INSERT INTO tblInscripciones (ActividadID, UsuarioID) VALUES (?, ?)', 
-                      (data.get('activity_id'), data.get('user_id')))
-        conn.commit()
+        
+        cursor.execute("""
+            SELECT TOP 10 u.FullName, r.NombreRol, u.FechaCreacion as Fecha
+            FROM tblUsuarios u
+            JOIN tblRoles r ON u.RolID = r.RolID
+            ORDER BY u.FechaCreacion DESC
+        """)
+        users = cursor.fetchall()
+        
+        cursor.execute("""
+            SELECT TOP 10 a.Accion, a.UsuarioModificador, a.FechaModificacion as Fecha, act.Titulo
+            FROM tblAuditoria_Actividades a
+            LEFT JOIN tblActividades act ON a.ActividadID = act.ActividadID
+            ORDER BY a.FechaModificacion DESC
+        """)
+        audits = cursor.fetchall()
+        
         conn.close()
-        return jsonify({"message": "Inscripción exitosa"}), 201
+        
+        feed = []
+        for row in users:
+            feed.append({
+                'type': 'user',
+                'name': row[0],
+                'role': row[1],
+                'date': row[2].isoformat() if row[2] else None
+            })
+            
+        for row in audits:
+            feed.append({
+                'type': 'activity',
+                'action': row[0], 
+                'user': row[1],
+                'date': row[2].isoformat() if row[2] else None,
+                'title': row[3] or 'Actividad Eliminada'
+            })
+            
+        feed.sort(key=lambda x: x['date'] if x['date'] else '', reverse=True)
+        return jsonify(feed[:5]), 200
     except Exception as e:
-        print(f"[ERROR Enrollment]: {e}")
-        return jsonify({"error": "Error al inscribirse."}), 500
+        print(f"[ERROR Recent Activity]: {e}")
+        return jsonify({"error": "Error obteniendo actividad reciente."}), 500
 
 if __name__ == '__main__':
     print("========================================")

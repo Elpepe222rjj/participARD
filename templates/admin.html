@@ -83,28 +83,61 @@
         <!-- Overview Tab -->
         <div id="content-overview" class="admin-tab block">
             <h1 class="text-3xl font-bold mb-8">Resumen General</h1>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="glass-card bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden group">
+            
+            <!-- Top Row: Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="glass-panel border border-white/10 rounded-2xl p-6 relative overflow-hidden group bg-white/5">
                     <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:text-emerald-400 group-hover:scale-110 transition-all duration-300">
                         <i data-lucide="users" class="w-16 h-16"></i>
                     </div>
-                    <h3 class="text-white/60 font-medium mb-2">Total Usuarios</h3>
-                    <p id="stat-users" class="text-4xl font-bold text-white glow-text">0</p>
+                    <h3 class="text-white/40 font-semibold mb-3 uppercase text-[10px] tracking-widest">TOTAL USUARIOS</h3>
+                    <p id="stat-users" class="text-3xl font-bold text-white mb-2">0</p>
+                    <p class="text-emerald-400 text-xs font-medium flex items-center gap-1"><i data-lucide="arrow-up" class="w-3 h-3"></i> 1 nuevo este mes</p>
                 </div>
-                <div class="glass-card bg-white/5 border border-white/10 rounded-2xl p-6 relative overflow-hidden group">
+                
+                <div class="glass-panel border border-white/10 rounded-2xl p-6 relative overflow-hidden group bg-white/5">
                     <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:text-emerald-400 group-hover:scale-110 transition-all duration-300">
                         <i data-lucide="book-open" class="w-16 h-16"></i>
                     </div>
-                    <h3 class="text-white/60 font-medium mb-2">Total Actividades</h3>
-                    <p id="stat-activities" class="text-4xl font-bold text-white glow-text">0</p>
+                    <h3 class="text-white/40 font-semibold mb-3 uppercase text-[10px] tracking-widest">TOTAL ACTIVIDADES</h3>
+                    <p id="stat-activities" class="text-3xl font-bold text-white mb-2">0</p>
+                    <p class="text-red-400 text-xs font-medium flex items-center gap-1"><i data-lucide="arrow-down" class="w-3 h-3"></i> 3 menos que ayer</p>
                 </div>
             </div>
             
-            <!-- Gráfico Resumen -->
-            <div class="mt-8 glass-panel border border-white/10 rounded-2xl p-6 shadow-[0_0_30px_rgba(16,185,129,0.05)]">
-                <h3 class="text-xl font-bold mb-6 text-white">Distribución de Usuarios</h3>
-                <div class="relative h-80 w-full">
-                    <canvas id="adminSummaryChart"></canvas>
+            <!-- Middle Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+                <!-- Distribución de usuarios -->
+                <div class="glass-panel border border-white/10 rounded-2xl p-6 lg:col-span-2 bg-white/5">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-sm font-semibold text-white/80">Distribución de usuarios</h3>
+                        <span class="text-[10px] px-2 py-1 rounded-md bg-white/5 text-white/50 border border-white/10">Por rol</span>
+                    </div>
+                    <div class="relative h-48 w-full flex items-center justify-center">
+                        <canvas id="adminSummaryChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Actividad reciente -->
+                <div class="glass-panel border border-white/10 rounded-2xl p-6 lg:col-span-3 bg-white/5">
+                    <h3 class="text-sm font-semibold text-white/80 mb-6">Actividad reciente</h3>
+                    <div class="space-y-4" id="recent-activity-list">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Bottom Row -->
+            <div class="grid grid-cols-1 gap-6">
+                <!-- Roles y permisos -->
+                <div class="glass-panel border border-white/10 rounded-2xl p-6 flex flex-col bg-white/5">
+                    <h3 class="text-sm font-semibold text-white/80 mb-6">Roles y permisos</h3>
+                    <div class="space-y-4 flex-1" id="roles-permissions-list">
+                        <!-- Populated by JS -->
+                    </div>
+                    <div id="last-role-change" class="mt-4 pt-4 border-t border-white/5 text-[10px] text-white/30">
+                        Último cambio de rol: calculando...
+                    </div>
                 </div>
             </div>
         </div>
@@ -119,14 +152,44 @@
                 </button>
             </div>
             
+            <!-- Stats Row -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="glass-panel border border-white/10 rounded-2xl p-6 bg-white/5">
+                    <p class="text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">TOTAL</p>
+                    <div class="text-3xl font-bold text-white mb-1" id="act-stat-total">-</div>
+                    <p class="text-xs text-white/40">actividades</p>
+                </div>
+                <div class="glass-panel border border-white/10 rounded-2xl p-6 bg-white/5">
+                    <p class="text-xs font-semibold text-white/50 uppercase tracking-wider mb-2">PRÓX. CIERRE</p>
+                    <div class="text-3xl font-bold text-white mb-1" id="act-stat-prox">-</div>
+                    <p class="text-xs text-amber-400" id="act-stat-prox-days">en - días</p>
+                </div>
+            </div>
+            
+            <!-- Filters & Search Row -->
+            <div class="glass-panel border border-white/10 rounded-2xl p-4 bg-white/5 mb-6 flex flex-col md:flex-row gap-4 items-center justify-between">
+                <div class="relative w-full md:w-96">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"></i>
+                    <input type="text" id="activity-search-input" placeholder="Buscar por título o tipo" class="w-full bg-black/20 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm text-white placeholder-white/40 focus:outline-none focus:border-emerald-500/50 transition-colors">
+                </div>
+                <div class="w-full md:w-auto">
+                    <select id="activity-filter-select" class="w-full md:w-auto bg-black/20 border border-emerald-500/30 rounded-xl py-2 px-4 text-sm text-white focus:outline-none focus:border-emerald-500/50 transition-colors">
+                        <option class="bg-[#0a0f1e]" value="all">Todas las categorías</option>
+                        <!-- Opciones dinámicas -->
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Table -->
             <div class="glass-panel border border-white/10 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.05)]">
                 <table class="w-full text-left">
                     <thead class="bg-white/5 border-b border-white/10">
                         <tr>
-                            <th class="px-6 py-4 text-sm font-medium text-white/60">Título</th>
-                            <th class="px-6 py-4 text-sm font-medium text-white/60">Tipo</th>
-                            <th class="px-6 py-4 text-sm font-medium text-white/60">Cierre</th>
-                            <th class="px-6 py-4 text-sm font-medium text-white/60 text-right">Acciones</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-white/50 uppercase tracking-wider">TÍTULO</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-white/50 uppercase tracking-wider">TIPO</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-white/50 uppercase tracking-wider">FECHA DE CIERRE</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-white/50 uppercase tracking-wider">CREADO POR</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-white/50 uppercase tracking-wider text-right">ACCIONES</th>
                         </tr>
                     </thead>
                     <tbody id="admin-activities-list" class="divide-y divide-white/10">
@@ -146,20 +209,49 @@
                 </button>
             </div>
             
-            <div class="glass-panel border border-white/10 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.05)]">
-                <table class="w-full text-left">
-                    <thead class="bg-white/5 border-b border-white/10">
-                        <tr>
-                            <th class="px-6 py-4 text-sm font-medium text-white/60">Nombre</th>
-                            <th class="px-6 py-4 text-sm font-medium text-white/60">Email</th>
-                            <th class="px-6 py-4 text-sm font-medium text-white/60">Rol</th>
-                            <th class="px-6 py-4 text-sm font-medium text-white/60 text-right">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody id="admin-users-list" class="divide-y divide-white/10">
-                        <!-- Llenado via JS -->
-                    </tbody>
-                </table>
+            <!-- Stats Row -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="glass-panel border border-white/10 rounded-xl p-4 bg-[#111827]">
+                    <p class="text-[11px] font-semibold text-white/50 uppercase tracking-wider mb-1">Total usuarios</p>
+                    <div class="text-2xl font-bold text-white" id="user-stat-total">-</div>
+                    <p class="text-[11px] text-emerald-400 mt-1" id="user-stat-new">Calculando...</p>
+                </div>
+                <div class="glass-panel border border-white/10 rounded-xl p-4 bg-[#111827]">
+                    <p class="text-[11px] font-semibold text-white/50 uppercase tracking-wider mb-1">Roles asignados</p>
+                    <div class="text-2xl font-bold text-white" id="user-stat-roles">-</div>
+                    <p class="text-[11px] text-purple-400 mt-1">Admin, Editor, Estudiante</p>
+                </div>
+            </div>
+
+            <!-- Toolbar / Filters -->
+            <div class="flex flex-col md:flex-row gap-3 mb-4 items-center">
+                <div class="relative flex-1 w-full">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40"></i>
+                    <input type="text" id="user-search-input" placeholder="Buscar por nombre, email o rol..." class="w-full bg-[#111827] border border-white/10 rounded-lg py-2 pl-9 pr-4 text-[13px] text-white placeholder-white/40 focus:outline-none focus:border-emerald-500/50 transition-colors">
+                </div>
+            </div>
+            
+            <div class="glass-panel border border-white/10 rounded-xl overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.05)]">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse min-w-[700px]">
+                        <thead class="bg-white/5 border-b border-white/10">
+                            <tr>
+                                <th class="px-4 py-3 text-[11px] font-semibold text-white/50 uppercase tracking-wider">Usuario</th>
+                                <th class="px-4 py-3 text-[11px] font-semibold text-white/50 uppercase tracking-wider">Email</th>
+                                <th class="px-4 py-3 text-[11px] font-semibold text-white/50 uppercase tracking-wider">Rol</th>
+                                <th class="px-4 py-3 text-[11px] font-semibold text-white/50 uppercase tracking-wider">Último acceso</th>
+                                <th class="px-4 py-3 text-[11px] font-semibold text-white/50 uppercase tracking-wider text-right">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-users-list" class="divide-y divide-white/5">
+                            <!-- Llenado via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="flex justify-start items-center mt-4" id="user-pagination">
+                <span class="text-xs text-white/50" id="user-pagination-info">Mostrando 0 usuarios</span>
             </div>
         </div>
 
@@ -279,7 +371,7 @@
     </div>
 
     <!-- Scripts -->
-    <script src="/static/js/main.js"></script>
+    <script src="/static/js/main.js?v=3"></script>
     <script>
         lucide.createIcons();
     </script>
