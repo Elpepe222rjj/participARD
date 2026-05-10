@@ -8,11 +8,21 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import threading
+import re
+from datetime import datetime, timedelta
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+
+# Deshabilitar caché en desarrollo para evitar el problema de "cosas diferentes" entre laptops
+@app.after_request
+def add_header(response):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '-1'
+    return response
 
 
 DB_DRIVER = os.getenv('DB_DRIVER', '{ODBC Driver 18 for SQL Server}')
@@ -96,6 +106,19 @@ def send_activity_notification_email(activity_data, recipient_emails):
 def get_db_connection():
     return pyodbc.connect(conn_str)
 
+def is_password_secure(password):
+    if len(password) < 12:
+        return False, "La contraseña debe tener al menos 12 caracteres."
+    if not re.search(r"[A-Z]", password):
+        return False, "La contraseña debe incluir al menos una mayúscula."
+    if not re.search(r"[a-z]", password):
+        return False, "La contraseña debe incluir al menos una minúscula."
+    if not re.search(r"\d", password):
+        return False, "La contraseña debe incluir al menos un número."
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        return False, "La contraseña debe incluir al menos un carácter especial."
+    return True, ""
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -103,6 +126,16 @@ def index():
 @app.route('/admin')
 def admin():
     return render_template('admin.html')
+
+@app.route('/sw.js')
+def serve_sw():
+    # Return empty JS to satisfy browser PWA checks without actual PWA
+    return app.response_class("self.addEventListener('fetch', function(event) { });", mimetype='application/javascript')
+
+@app.route('/favicon.ico')
+def favicon():
+    # Return 204 No Content for favicon to stop 404s
+    return '', 204
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
@@ -112,6 +145,10 @@ def register():
     password = data.get('password')
     role = data.get('role', 'Rol_Estudiantes')
 
+    is_secure, message = is_password_secure(password)
+    if not is_secure:
+        return jsonify({"error": message}), 400
+
     try:
         salt = bcrypt.gensalt()
         password_hash = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
@@ -120,6 +157,10 @@ def register():
         cursor = conn.cursor()
         
         cursor.execute("{CALL sp_RegistrarUsuario (?, ?, ?, ?)}", (email, full_name, password_hash, role))
+        # sp_RegistrarUsuario doesn't set FechaUltimoCambioPassword by default in old script, 
+        # but our migration added the default. Let's ensure it's set if we want to be explicit.
+        cursor.execute("UPDATE tblUsuarios SET FechaUltimoCambioPassword = GETDATE() WHERE Email = ?", (email,))
+        
         conn.commit()
         conn.close()
         return jsonify({"message": "Usuario registrado con éxito en SQL Server."}), 201
@@ -139,21 +180,62 @@ def login():
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        cursor.execute("SELECT UsuarioID, FullName, Email, PasswordHash, RolID FROM tblUsuarios WHERE Email = ?", (email,))
+        cursor.execute("""
+            SELECT UsuarioID, FullName, Email, PasswordHash, RolID, 
+                   IntentosFallidos, BloqueadoHasta, FechaUltimoCambioPassword 
+            FROM tblUsuarios WHERE Email = ?
+        """, (email,))
         row = cursor.fetchone()
         
         if not row:
             return jsonify({"error": "Credenciales inválidas (Usuario no encontrado)."}), 401
             
-        user_id, full_name, user_email, password_hash, rol_id = row
+        user_id, full_name, user_email, password_hash, rol_id, intentos, bloqueado_hasta, fecha_pass = row
         
+        # Check if blocked
+        if bloqueado_hasta and bloqueado_hasta > datetime.now():
+            segundos_restantes = int((bloqueado_hasta - datetime.now()).total_seconds())
+            return jsonify({
+                "error": "Cuenta bloqueada temporalmente.",
+                "lockout": True,
+                "seconds_remaining": segundos_restantes
+            }), 403
+
         if not bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
-            return jsonify({"error": "Credenciales inválidas (Contraseña incorrecta)."}), 401
+            # Increment failed attempts
+            intentos += 1
+            if intentos >= 3:
+                nuevo_bloqueo = datetime.now() + timedelta(minutes=3)
+                cursor.execute("UPDATE tblUsuarios SET IntentosFallidos = ?, BloqueadoHasta = ? WHERE UsuarioID = ?", 
+                             (intentos, nuevo_bloqueo, user_id))
+                conn.commit()
+                return jsonify({
+                    "error": "Cuenta bloqueada por 3 minutos tras 3 intentos fallidos.",
+                    "lockout": True,
+                    "seconds_remaining": 180
+                }), 403
+            else:
+                cursor.execute("UPDATE tblUsuarios SET IntentosFallidos = ? WHERE UsuarioID = ?", (intentos, user_id))
+                conn.commit()
+                return jsonify({"error": f"Contraseña incorrecta. Intento {intentos} de 3."}), 401
             
+        # Success - Reset lockout and attempts
+        cursor.execute("UPDATE tblUsuarios SET IntentosFallidos = 0, BloqueadoHasta = NULL WHERE UsuarioID = ?", (user_id,))
+        
+        # Check password expiration (90 days)
+        if fecha_pass and (datetime.now() - fecha_pass).days >= 90:
+            conn.commit()
+            return jsonify({
+                "error": "Tu contraseña ha expirado (más de 90 días). Por favor, cámbiala.",
+                "expired": True,
+                "user_id": str(user_id)
+            }), 403
+
         cursor.execute("SELECT NombreRol FROM tblRoles WHERE RolID = ?", (rol_id,))
         role_row = cursor.fetchone()
         role_name = role_row[0] if role_row else 'Rol_Estudiantes'
         
+        conn.commit()
         conn.close()
         return jsonify({
             "user": {
@@ -179,10 +261,12 @@ def get_activities():
             SELECT a.ActividadID as id, a.Titulo as title, a.Descripcion as description, 
                    a.Tipo as type_id, a.FechaCierre as end_date, 
                    i.Nombre as institution_name, i.InstitucionID as institution_id,
-                   'Activa' as status,
+                   ISNULL(a.Estado, 'Activa') as status,
                    ISNULL(a.Localidad, 'No especificada') as location,
                    ISNULL(a.Provincia, 'N/A') as province,
                    a.ImagenURL as image_url,
+                   a.SitioOficialURL as official_url,
+                   a.FechaInicio as start_date,
                    aud.UsuarioModificador as created_by,
                    aud.FechaModificacion as created_at
             FROM tblActividades a
@@ -197,7 +281,7 @@ def get_activities():
         """
         params = []
         if not fetch_all:
-            query += " AND a.FechaCierre >= GETDATE()"
+            query += " AND (a.FechaCierre >= GETDATE() OR a.FechaCierre IS NULL) AND ISNULL(a.Estado, 'Activa') = 'Activa'"
         if province:
             query += " AND a.Provincia = ?"
             params.append(province)
@@ -308,11 +392,16 @@ def create_activity():
         else:
             inst_id = 1
             
+        fecha_inicio = data.get('FechaInicio')
+        fecha_inicio = fecha_inicio if fecha_inicio else None
+        fecha_cierre = data.get('FechaCierre')
+        fecha_cierre = fecha_cierre if fecha_cierre else None
+        
         cursor.execute("""
-            INSERT INTO tblActividades (Titulo, Descripcion, Tipo, FechaCierre, InstitucionID, Localidad, Provincia, ImagenURL)
+            INSERT INTO tblActividades (Titulo, Descripcion, Tipo, FechaInicio, FechaCierre, InstitucionID, Localidad, Provincia, ImagenURL, SitioOficialURL, Estado)
             OUTPUT inserted.ActividadID
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (data.get('Titulo'), data.get('Descripcion'), data.get('Tipo'), data.get('FechaCierre'), inst_id, data.get('Localidad'), None, data.get('ImagenURL')))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (data.get('Titulo'), data.get('Descripcion'), data.get('Tipo'), fecha_inicio, fecha_cierre, inst_id, data.get('Localidad'), None, data.get('ImagenURL'), data.get('SitioOficialURL'), data.get('Estado', 'Activa')))
         
         new_activity_id = cursor.fetchone()[0]
         
@@ -369,12 +458,17 @@ def update_activity(id):
         else:
             inst_id = 1
 
+        fecha_inicio = data.get('FechaInicio')
+        fecha_inicio = fecha_inicio if fecha_inicio else None
+        fecha_cierre = data.get('FechaCierre')
+        fecha_cierre = fecha_cierre if fecha_cierre else None
+        
         cursor.execute("""
             UPDATE tblActividades 
-            SET Titulo=?, Descripcion=?, Tipo=?, FechaCierre=?, Localidad=?, Provincia=?, InstitucionID=?, ImagenURL=?
+            SET Titulo=?, Descripcion=?, Tipo=?, FechaInicio=?, FechaCierre=?, Localidad=?, Provincia=?, InstitucionID=?, ImagenURL=?, SitioOficialURL=?, Estado=?
             WHERE ActividadID=?
-        """, (data.get('Titulo'), data.get('Descripcion'), data.get('Tipo'), data.get('FechaCierre'), 
-              data.get('Localidad'), None, inst_id, data.get('ImagenURL'), id))
+        """, (data.get('Titulo'), data.get('Descripcion'), data.get('Tipo'), fecha_inicio, fecha_cierre, 
+              data.get('Localidad'), None, inst_id, data.get('ImagenURL'), data.get('SitioOficialURL'), data.get('Estado', 'Activa'), id))
               
         cursor.execute("""
             INSERT INTO tblAuditoria_Actividades (ActividadID, Accion, UsuarioModificador)
@@ -451,6 +545,148 @@ def delete_user(id):
         print(e)
         return jsonify({"error": "Error eliminando usuario"}), 500
 
+
+@app.route('/api/news', methods=['GET'])
+def get_news():
+    try:
+        search = request.args.get('search')
+        query = """
+            SELECT n.NoticiaID as id, n.Titulo as title, n.Resumen as summary, 
+                   n.Contenido as content, n.ImagenURL as image_url, 
+                   n.FechaPublicacion as date, n.Vistas as views,
+                   u.FullName as author_name, u.UsuarioID as author_id
+            FROM tblNoticias n
+            LEFT JOIN tblUsuarios u ON n.AutorID = u.UsuarioID
+            WHERE 1=1
+        """
+        params = []
+        if search:
+            query += " AND (n.Titulo LIKE ? OR n.Resumen LIKE ?)"
+            params.extend([f'%{search}%', f'%{search}%'])
+        
+        query += " ORDER BY n.FechaPublicacion DESC"
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        
+        columns = [column[0] for column in cursor.description]
+        results = []
+        for row in cursor.fetchall():
+            row_dict = dict(zip(columns, row))
+            if row_dict['author_id']:
+                row_dict['author_id'] = str(row_dict['author_id'])
+            results.append(row_dict)
+            
+        conn.close()
+        return jsonify(results), 200
+    except Exception as e:
+        print(f"[ERROR Get News]: {e}")
+        return jsonify({"error": "Error obteniendo noticias."}), 500
+
+@app.route('/api/news/<int:news_id>', methods=['GET'])
+def get_news_detail(news_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT n.NoticiaID, n.Titulo, n.Contenido, n.Resumen, n.ImagenURL, 
+                   n.FechaPublicacion, n.Vistas, u.FullName as AutorNombre
+            FROM tblNoticias n
+            LEFT JOIN tblUsuarios u ON n.AutorID = u.UsuarioID
+            WHERE n.NoticiaID = ?
+        """, (news_id,))
+        
+        row = cursor.fetchone()
+        if not row:
+            conn.close()
+            return jsonify({'error': 'Noticia no encontrada'}), 404
+            
+        news = {
+            'id': row[0],
+            'title': row[1],
+            'content': row[2],
+            'summary': row[3],
+            'image_url': row[4],
+            'date': row[5].isoformat() if row[5] else None,
+            'views': row[6],
+            'author_name': row[7]
+        }
+        
+        conn.close()
+        return jsonify(news), 200
+    except Exception as e:
+        print(f"[ERROR Get News Detail]: {e}")
+        return jsonify({"error": "Error obteniendo detalle de noticia."}), 500
+
+@app.route('/api/news/<int:news_id>/view', methods=['POST'])
+def increment_news_view(news_id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE tblNoticias SET Vistas = Vistas + 1 WHERE NoticiaID = ?", (news_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/news', methods=['POST'])
+def create_news():
+    data = request.json
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO tblNoticias (Titulo, Contenido, Resumen, ImagenURL, AutorID)
+            OUTPUT inserted.NoticiaID
+            VALUES (?, ?, ?, ?, ?)
+        """, (data.get('title'), data.get('content'), data.get('summary'), 
+              data.get('image_url'), data.get('author_id')))
+        
+        new_id = cursor.fetchone()[0]
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Noticia creada exitosamente", "id": new_id}), 201
+    except Exception as e:
+        print(f"[ERROR Create News]: {e}")
+        return jsonify({"error": "Error creando noticia"}), 500
+
+@app.route('/api/news/<int:id>', methods=['PUT'])
+def update_news(id):
+    data = request.json
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE tblNoticias 
+            SET Titulo=?, Contenido=?, Resumen=?, ImagenURL=?
+            WHERE NoticiaID=?
+        """, (data.get('title'), data.get('content'), data.get('summary'), 
+              data.get('image_url'), id))
+        
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Noticia actualizada"}), 200
+    except Exception as e:
+        print(f"[ERROR Update News]: {e}")
+        return jsonify({"error": "Error actualizando noticia"}), 500
+
+@app.route('/api/news/<int:id>', methods=['DELETE'])
+def delete_news(id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM tblNoticias WHERE NoticiaID = ?", (id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Noticia eliminada"}), 200
+    except Exception as e:
+        print(f"[ERROR Delete News]: {e}")
+        return jsonify({"error": "Error eliminando noticia"}), 500
 
 @app.route('/api/recent_activity', methods=['GET'])
 def get_recent_activity():
