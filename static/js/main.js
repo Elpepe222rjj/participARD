@@ -355,7 +355,7 @@ function renderActivitiesGrid() {
     }
     
     filteredActivities.forEach(act => {
-        const date = new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+        const date = act.end_date ? new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'No definida';
         
         const showAction = !currentUser || currentUser.role === 'Rol_Estudiantes';
         const actionHtml = showAction ? `
@@ -482,7 +482,7 @@ function openPublicActivityModal(activityId) {
     document.getElementById('public-activity-province').innerHTML = act.province;
     document.getElementById('public-activity-inst').innerText = act.institution_name || 'Desconocida';
     
-    const dateStr = new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });
+    const dateStr = act.end_date ? new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
     document.getElementById('public-activity-date').innerText = dateStr;
 
     const imgContainer = document.getElementById('public-activity-image-container');
@@ -855,12 +855,20 @@ if (actForm) {
     actForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('act-id').value;
+        const startDate = document.getElementById('act-start-date') ? document.getElementById('act-start-date').value : null;
+        const endDate = document.getElementById('act-date') ? document.getElementById('act-date').value : null;
+        
+        if (!startDate && !endDate) {
+            alert('Debes proveer al menos una fecha (Inicio o Cierre).');
+            return;
+        }
+
         const body = {
             Titulo: document.getElementById('act-title').value,
             Descripcion: document.getElementById('act-desc').value,
             Tipo: document.getElementById('act-type').value,
-            FechaInicio: document.getElementById('act-start-date') ? document.getElementById('act-start-date').value : document.getElementById('act-date').value,
-            FechaCierre: document.getElementById('act-date').value,
+            FechaInicio: startDate,
+            FechaCierre: endDate,
             Estado: document.getElementById('act-status') ? document.getElementById('act-status').value : 'Activa',
             Localidad: document.getElementById('act-location').value,
             InstitucionNombre: document.getElementById('act-institution').value,
@@ -1248,8 +1256,13 @@ function renderAdminActivitiesTable(activities) {
             else createdTimeLabel = `Hace ${diffDays} días`;
         }
 
-        const dateObj = new Date(a.end_date);
-        const isClosed = dateObj < today;
+        let isClosed = false;
+        let dateString = 'No definida';
+        if (a.end_date) {
+            const dateObj = new Date(a.end_date);
+            isClosed = dateObj < today;
+            dateString = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
         const typeNormalized = a.type_id.toLowerCase();
         
         let typeColor = 'blue';
@@ -1272,7 +1285,7 @@ function renderAdminActivitiesTable(activities) {
                     </span>
                 </td>
                 <td class="px-6 py-4 text-sm ${isClosed ? 'text-white/30' : 'text-white/80'}">
-                    ${dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    ${dateString}
                 </td>
                 <td class="px-6 py-4">
                     <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${a.status === 'Activa' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-white/5 text-white/40 border border-white/10'}">

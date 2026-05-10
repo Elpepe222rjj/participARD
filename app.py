@@ -281,7 +281,7 @@ def get_activities():
         """
         params = []
         if not fetch_all:
-            query += " AND a.FechaCierre >= GETDATE() AND ISNULL(a.Estado, 'Activa') = 'Activa'"
+            query += " AND (a.FechaCierre >= GETDATE() OR a.FechaCierre IS NULL) AND ISNULL(a.Estado, 'Activa') = 'Activa'"
         if province:
             query += " AND a.Provincia = ?"
             params.append(province)
@@ -392,11 +392,16 @@ def create_activity():
         else:
             inst_id = 1
             
+        fecha_inicio = data.get('FechaInicio')
+        fecha_inicio = fecha_inicio if fecha_inicio else None
+        fecha_cierre = data.get('FechaCierre')
+        fecha_cierre = fecha_cierre if fecha_cierre else None
+        
         cursor.execute("""
             INSERT INTO tblActividades (Titulo, Descripcion, Tipo, FechaInicio, FechaCierre, InstitucionID, Localidad, Provincia, ImagenURL, SitioOficialURL, Estado)
             OUTPUT inserted.ActividadID
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (data.get('Titulo'), data.get('Descripcion'), data.get('Tipo'), data.get('FechaInicio'), data.get('FechaCierre'), inst_id, data.get('Localidad'), None, data.get('ImagenURL'), data.get('SitioOficialURL'), data.get('Estado', 'Activa')))
+        """, (data.get('Titulo'), data.get('Descripcion'), data.get('Tipo'), fecha_inicio, fecha_cierre, inst_id, data.get('Localidad'), None, data.get('ImagenURL'), data.get('SitioOficialURL'), data.get('Estado', 'Activa')))
         
         new_activity_id = cursor.fetchone()[0]
         
@@ -453,11 +458,16 @@ def update_activity(id):
         else:
             inst_id = 1
 
+        fecha_inicio = data.get('FechaInicio')
+        fecha_inicio = fecha_inicio if fecha_inicio else None
+        fecha_cierre = data.get('FechaCierre')
+        fecha_cierre = fecha_cierre if fecha_cierre else None
+        
         cursor.execute("""
             UPDATE tblActividades 
             SET Titulo=?, Descripcion=?, Tipo=?, FechaInicio=?, FechaCierre=?, Localidad=?, Provincia=?, InstitucionID=?, ImagenURL=?, SitioOficialURL=?, Estado=?
             WHERE ActividadID=?
-        """, (data.get('Titulo'), data.get('Descripcion'), data.get('Tipo'), data.get('FechaInicio'), data.get('FechaCierre'), 
+        """, (data.get('Titulo'), data.get('Descripcion'), data.get('Tipo'), fecha_inicio, fecha_cierre, 
               data.get('Localidad'), None, inst_id, data.get('ImagenURL'), data.get('SitioOficialURL'), data.get('Estado', 'Activa'), id))
               
         cursor.execute("""
