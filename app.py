@@ -53,29 +53,45 @@ def send_activity_notification_email(activity_data, recipient_emails):
         print("[EMAIL] SMTP credentials not set or no recipients found. Skipping emails.")
         return
 
-    subject = f"¡Nueva Oportunidad Disponible en ParticipARD: {activity_data['Titulo']}!"
+    subject = f"🚀 Nueva Oportunidad: {activity_data['Titulo']}"
     
     html_content = f"""
     <html>
-      <body style="font-family: Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px;">
-        <div style="max-w: 600px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-          <div style="text-align: center; margin-bottom: 20px;">
-            <h2 style="color: #10b981; margin: 0;">Particip<span style="color: #34d399;">ARD</span></h2>
-          </div>
-          <h3 style="color: #1f2937; font-size: 20px;">¡Hola! Hay una nueva oportunidad para ti.</h3>
-          <p style="color: #4b5563; line-height: 1.6;">Se ha agregado una nueva actividad a la plataforma que podría interesarte:</p>
-          
-          <div style="background-color: #f9fafb; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0;"><strong style="color: #111827;">{activity_data['Titulo']}</strong></p>
-            <p style="margin: 0 0 5px 0; font-size: 14px; color: #4b5563;"><strong>Tipo:</strong> {activity_data['Tipo']}</p>
-            <p style="margin: 0 0 5px 0; font-size: 14px; color: #4b5563;"><strong>Ubicación:</strong> {activity_data['Localidad']}, {activity_data['Provincia']}</p>
-            <p style="margin: 0 0 5px 0; font-size: 14px; color: #4b5563;"><strong>Cierra el:</strong> {activity_data['FechaCierre']}</p>
+      <body style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #080d1a; margin: 0; padding: 40px; color: #ffffff;">
+        <div style="max-w: 600px; margin: 0 auto; background-color: #111827; padding: 40px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
+          <div style="text-align: center; margin-bottom: 32px;">
+            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.025em;">
+                Participa<span style="color: #10b981;">RD</span>
+            </h1>
           </div>
           
-          <p style="color: #4b5563; line-height: 1.6;">{activity_data['Descripcion']}</p>
+          <div style="background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%); height: 4px; border-radius: 2px; margin-bottom: 32px;"></div>
           
-          <div style="text-align: center; margin-top: 30px;">
-            <a href="http://localhost:5000" style="background-color: #10b981; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Ver Actividad en ParticipARD</a>
+          <h2 style="color: #ffffff; font-size: 22px; margin-bottom: 16px; font-weight: 700;">¡Hola! Tenemos algo nuevo para ti.</h2>
+          <p style="color: #9ca3af; line-height: 1.6; font-size: 16px;">Se ha publicado una nueva actividad en nuestra plataforma que encaja con tu perfil:</p>
+          
+          <div style="background-color: rgba(255,255,255,0.03); border: 1px solid rgba(16,185,129,0.2); padding: 24px; border-radius: 16px; margin: 24px 0;">
+            <h3 style="margin: 0 0 12px 0; color: #10b981; font-size: 18px;">{activity_data['Titulo']}</h3>
+            <p style="margin: 0 0 8px 0; font-size: 14px; color: #9ca3af;"><strong style="color: #ffffff;">Tipo:</strong> {activity_data['Tipo']}</p>
+            <p style="margin: 0 0 8px 0; font-size: 14px; color: #9ca3af;"><strong style="color: #ffffff;">Ubicación:</strong> {activity_data['Localidad']}, {activity_data['Provincia']}</p>
+            <p style="margin: 0; font-size: 14px; color: #9ca3af;"><strong style="color: #ffffff;">Fecha de Cierre:</strong> {activity_data['FechaCierre']}</p>
+          </div>
+          
+          <p style="color: #9ca3af; line-height: 1.6; font-size: 15px; margin-bottom: 32px;">
+            {activity_data['Descripcion'][:200]}{"..." if len(activity_data['Descripcion']) > 200 else ""}
+          </p>
+          
+          <div style="text-align: center;">
+            <a href="https://participard.com" style="background-color: #10b981; color: #ffffff; padding: 16px 32px; text-decoration: none; border-radius: 12px; font-weight: 700; font-size: 16px; display: inline-block; box-shadow: 0 10px 15px -3px rgba(16,185,129,0.3);">
+                Ver Detalles Completos
+            </a>
+          </div>
+          
+          <div style="margin-top: 40px; padding-top: 24px; border-top: 1px solid rgba(255,255,255,0.05); text-align: center;">
+            <p style="color: #4b5563; font-size: 12px; margin: 0;">
+                Has recibido este correo porque estás registrado en ParticipaRD.<br>
+                © 2026 ParticipaRD. Todos los derechos reservados.
+            </p>
           </div>
         </div>
       </body>
@@ -99,7 +115,7 @@ def send_activity_notification_email(activity_data, recipient_emails):
             server.send_message(msg)
             
         server.quit()
-        print(f"[EMAIL] Notificaciones enviadas exitosamente a {len(recipient_emails)} estudiantes.")
+        print(f"[EMAIL] Notificaciones enviadas exitosamente a {len(recipient_emails)} usuarios.")
     except Exception as e:
         print(f"[EMAIL ERROR] Error enviando notificaciones: {e}")
 
@@ -107,8 +123,8 @@ def get_db_connection():
     return pyodbc.connect(conn_str)
 
 def is_password_secure(password):
-    if len(password) < 12:
-        return False, "La contraseña debe tener al menos 12 caracteres."
+    if len(password) < 8:
+        return False, "La contraseña debe tener al menos 8 caracteres."
     if not re.search(r"[A-Z]", password):
         return False, "La contraseña debe incluir al menos una mayúscula."
     if not re.search(r"[a-z]", password):
@@ -415,28 +431,24 @@ def create_activity():
         
         conn.commit()
 
-        # Obtener correos de estudiantes
-        cursor.execute("""
-            SELECT u.Email 
-            FROM tblUsuarios u
-            JOIN tblRoles r ON u.RolID = r.RolID
-            WHERE r.NombreRol = 'Rol_Estudiantes' AND u.Email IS NOT NULL
-        """)
-        student_emails = [row[0] for row in cursor.fetchall()]
+        # Obtener correos de TODOS los usuarios registrados para notificar
+        cursor.execute("SELECT Email FROM tblUsuarios WHERE Email IS NOT NULL")
+        recipient_emails = [row[0] for row in cursor.fetchall()]
         
         conn.close()
 
-        # Iniciar hilo secundario para enviar correos si hay estudiantes
-        if student_emails:
+        # Iniciar hilo secundario para enviar correos si hay destinatarios
+        if recipient_emails:
             activity_data = {
                 'Titulo': data.get('Titulo', 'Nueva Actividad'),
                 'Descripcion': data.get('Descripcion', ''),
                 'Tipo': data.get('Tipo', 'Oportunidad'),
                 'FechaCierre': data.get('FechaCierre', ''),
                 'Localidad': data.get('Localidad', ''),
-                'Provincia': data.get('Provincia', '')
+                'Provincia': data.get('Provincia', 'República Dominicana')
             }
-            threading.Thread(target=send_activity_notification_email, args=(activity_data, student_emails)).start()
+            print(f"[DEBUG] Iniciando envío de correos a {len(recipient_emails)} usuarios...")
+            threading.Thread(target=send_activity_notification_email, args=(activity_data, recipient_emails)).start()
 
         return jsonify({"message": "Actividad creada exitosamente", "id": new_activity_id}), 201
     except Exception as e:
