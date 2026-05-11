@@ -324,9 +324,20 @@ async function fetchActivities(type = 'all') {
             const subAct = activities.length > 1 ? activities[1] : mainAct;
 
             const today = new Date();
-            const endDateMain = new Date(mainAct.end_date);
-            const diffTimeMain = endDateMain - today;
-            const daysLeftMain = Math.ceil(diffTimeMain / (1000 * 60 * 60 * 24));
+            let daysLeftMainText = 'Cerrada';
+            if (mainAct.end_date) {
+                const endDateMain = new Date(mainAct.end_date);
+                const diffTimeMain = endDateMain - today;
+                const daysLeftMain = Math.ceil(diffTimeMain / (1000 * 60 * 60 * 24));
+                daysLeftMainText = daysLeftMain > 0 ? `Cierra en ${daysLeftMain} días` : 'Cerrada';
+            } else if (mainAct.start_date) {
+                const startDateMain = new Date(mainAct.start_date);
+                const diffTimeMain = startDateMain - today;
+                const daysLeftMain = Math.ceil(diffTimeMain / (1000 * 60 * 60 * 24));
+                daysLeftMainText = daysLeftMain > 0 ? `Inicia en ${daysLeftMain} días` : 'Iniciada';
+            } else {
+                daysLeftMainText = 'Fecha no definida';
+            }
             
             const elType = document.getElementById('hero-main-type');
             if (elType) {
@@ -334,7 +345,7 @@ async function fetchActivities(type = 'all') {
                 document.getElementById('hero-main-title').innerText = mainAct.title;
                 document.getElementById('hero-main-inst').innerText = mainAct.institution_name || 'Institución Destacada';
                 document.getElementById('hero-main-location').innerText = (mainAct.location && mainAct.province) ? `${mainAct.location}, ${mainAct.province}` : (mainAct.province || 'República Dominicana');
-                document.getElementById('hero-main-date').innerText = daysLeftMain > 0 ? `Cierra en ${daysLeftMain} días` : 'Cerrada';
+                document.getElementById('hero-main-date').innerText = daysLeftMainText;
 
                 document.getElementById('hero-sub-type').innerText = subAct.type_id || 'Actividad';
                 document.getElementById('hero-sub-title').innerText = subAct.title;
@@ -388,7 +399,10 @@ function renderActivitiesGrid() {
     }
     
     filteredActivities.forEach(act => {
-        const date = act.end_date ? new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'No definida';
+        const isEndDate = !!act.end_date;
+        const displayDate = isEndDate ? act.end_date : act.start_date;
+        const date = displayDate ? new Date(displayDate).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'No definida';
+        const dateLabel = isEndDate ? 'Cierre:' : (act.start_date ? 'Inicio:' : 'Fecha:');
         
         const showAction = !currentUser || currentUser.role === 'Rol_Estudiantes';
         const actionHtml = showAction ? `
@@ -432,7 +446,7 @@ function renderActivitiesGrid() {
                         <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
                             <i data-lucide="calendar" class="w-4 h-4 text-emerald-400"></i>
                         </div>
-                        <span class="font-medium">Cierre: ${date}</span>
+                        <span class="font-medium">${dateLabel} ${date}</span>
                     </div>
                 </div>
                 ${actionHtml}
@@ -515,8 +529,15 @@ function openPublicActivityModal(activityId) {
     document.getElementById('public-activity-province').innerHTML = act.province;
     document.getElementById('public-activity-inst').innerText = act.institution_name || 'Desconocida';
     
-    const dateStr = act.end_date ? new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
+    const isEndDateModal = !!act.end_date;
+    const displayDateModal = isEndDateModal ? act.end_date : act.start_date;
+    const dateStr = displayDateModal ? new Date(displayDateModal).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
     document.getElementById('public-activity-date').innerText = dateStr;
+    
+    const modalDateLabel = document.getElementById('public-activity-date-label');
+    if (modalDateLabel) {
+        modalDateLabel.innerText = isEndDateModal ? 'Fecha de cierre' : (act.start_date ? 'Fecha de inicio' : 'Fecha');
+    }
 
     const imgContainer = document.getElementById('public-activity-image-container');
     const imgEl = document.getElementById('public-activity-image');
@@ -1306,9 +1327,10 @@ function renderAdminActivitiesTable(activities) {
 
         let isClosed = false;
         let dateString = 'No definida';
-        if (a.end_date) {
-            const dateObj = new Date(a.end_date);
-            isClosed = dateObj < today;
+        const displayDateAdmin = a.end_date ? a.end_date : a.start_date;
+        if (displayDateAdmin) {
+            const dateObj = new Date(displayDateAdmin);
+            isClosed = a.end_date ? (dateObj < today) : false;
             dateString = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
         }
         const typeNormalized = a.type_id.toLowerCase();
@@ -1448,56 +1470,44 @@ function renderNewsGrid() {
         const dateStr = new Date(n.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
         const initials = n.author_name ? n.author_name.substring(0, 2).toUpperCase() : 'AD';
         
-        const isFeatured = index === 0;
-
         const card = document.createElement('div');
-        if (isFeatured) {
-            card.className = 'col-span-full glass-card group flex flex-col lg:flex-row h-auto lg:h-80 rounded-[2rem] overflow-hidden border border-white/5 hover:border-emerald-500/30 transition-all duration-500 cursor-pointer hover:shadow-[0_0_50px_rgba(16,185,129,0.15)] mb-8';
-        } else {
-            card.className = 'glass-card group flex flex-col h-full rounded-[2rem] overflow-hidden border border-white/5 hover:border-emerald-500/30 transition-all duration-500 cursor-pointer hover:shadow-[0_0_40px_rgba(16,185,129,0.1)]';
-        }
+        card.className = 'glass-card group flex flex-col h-full rounded-3xl overflow-hidden border border-white/5 hover:border-emerald-500/30 transition-all duration-500 cursor-pointer hover:shadow-[0_0_40px_rgba(16,185,129,0.1)]';
         
         card.onclick = () => openNewsDetail(n.id);
         
-        const imgSize = isFeatured ? 'lg:w-1/2' : 'h-56';
-        
         card.innerHTML = `
-            <div class="relative overflow-hidden shrink-0 ${imgSize} w-full h-56 lg:h-full">
+            <div class="relative overflow-hidden shrink-0 h-52 w-full">
                 <img src="${n.image_url || 'https://images.unsplash.com/photo-1585829365234-78d9b6924617?q=80&w=2070&auto=format&fit=crop'}" 
                      class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
                      alt="${n.title}">
                 <div class="absolute inset-0 bg-gradient-to-t from-[#080d1a] via-transparent to-transparent opacity-60"></div>
-                ${isFeatured ? '<div class="absolute top-6 left-6 px-4 py-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider shadow-lg">Destacado</div>' : ''}
             </div>
-            <div class="flex-1 p-8 flex flex-col justify-between">
+            <div class="flex-1 p-6 flex flex-col justify-between">
                 <div>
-                    <div class="flex items-center gap-4 mb-4">
-                        <span class="text-emerald-400 text-[11px] font-bold uppercase tracking-widest">${dateStr}</span>
+                    <div class="flex items-center gap-3 mb-3">
+                        <span class="text-emerald-400 text-[10px] font-bold uppercase tracking-widest">${dateStr}</span>
                         <div class="w-1 h-1 rounded-full bg-white/20"></div>
-                        <span class="text-white/40 text-[11px] flex items-center gap-1">
-                            <i data-lucide="eye" class="w-3.5 h-3.5"></i> ${n.views} vistas
+                        <span class="text-white/40 text-[10px] flex items-center gap-1">
+                            <i data-lucide="eye" class="w-3 h-3"></i> ${n.views}
                         </span>
                     </div>
-                    <h3 class="${isFeatured ? 'text-3xl lg:text-4xl' : 'text-xl'} font-bold text-white mb-4 group-hover:text-emerald-400 transition-colors leading-tight line-clamp-3">
+                    <h3 class="text-lg font-bold text-white mb-3 group-hover:text-emerald-400 transition-colors leading-tight line-clamp-2">
                         ${n.title}
                     </h3>
-                    <p class="text-white/50 text-sm leading-relaxed line-clamp-3 mb-6">
+                    <p class="text-white/50 text-xs leading-relaxed line-clamp-3 mb-4">
                         ${n.summary || ''}
                     </p>
                 </div>
                 
-                <div class="flex items-center justify-between pt-6 border-t border-white/10">
-                    <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-emerald-500/20">
+                <div class="flex items-center justify-between pt-4 border-t border-white/10">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-[10px] font-bold shadow-lg shadow-emerald-500/20">
                             ${initials}
                         </div>
-                        <div class="flex flex-col">
-                            <span class="text-xs font-semibold text-white/90">${n.author_name || 'ParticipaRD'}</span>
-                            <span class="text-[10px] text-white/40">Redacción</span>
-                        </div>
+                        <span class="text-[10px] font-semibold text-white/90">${n.author_name || 'ParticipaRD'}</span>
                     </div>
-                    <div class="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-emerald-500 group-hover:border-emerald-500 transition-all duration-300">
-                        <i data-lucide="arrow-right" class="w-5 h-5 text-emerald-400 group-hover:text-white transition-colors"></i>
+                    <div class="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-emerald-500 group-hover:border-emerald-500 transition-all duration-300">
+                        <i data-lucide="arrow-right" class="w-4 h-4 text-emerald-400 group-hover:text-white transition-colors"></i>
                     </div>
                 </div>
             </div>
