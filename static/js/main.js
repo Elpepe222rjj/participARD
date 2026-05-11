@@ -4,6 +4,11 @@
 
 const API_URL = '/api';
 
+// Cloudinary Configuration
+const CLOUDINARY_CLOUD_NAME = 'duvsilg9e'; 
+const CLOUDINARY_PRESET = 'participard_preset';
+
+
 // Efecto de scroll en Navbar
 window.addEventListener('scroll', () => {
     const navbar = document.getElementById('navbar');
@@ -734,6 +739,7 @@ async function loadAdminData() {
         if (window.lucide) window.lucide.createIcons();
         initCloudinary();
         initNewsCloudinary();
+        initContributorCloudinary();
 
         // RENDER CONTRIBUTORS TABLE (Missing call!)
         renderAdminContributors(contributors);
@@ -835,17 +841,25 @@ let cloudinaryWidget = null;
 function initCloudinary() {
     if (window.cloudinary && !cloudinaryWidget) {
         cloudinaryWidget = cloudinary.createUploadWidget({
-            cloudName: 'duvsilg9e', 
-            uploadPreset: 'participard_preset',
+            cloudName: CLOUDINARY_CLOUD_NAME, 
+            uploadPreset: CLOUDINARY_PRESET,
             sources: ['local', 'url', 'camera'],
             multiple: false,
-            language: 'es'
+            language: 'es',
+            clientAllowedFormats: ["png", "jpg", "jpeg", "webp"],
+            maxFileSize: 5000000, // 5MB
         }, (error, result) => { 
-            if (!error && result && result.event === "success") { 
+            if (error) {
+                console.error('Cloudinary Error:', error);
+                showPremiumAlert('Error de Subida', 'No se pudo conectar con Cloudinary. Verifica tu configuración.', 'error');
+                return;
+            }
+            if (result && result.event === "success") { 
                 const imgUrl = result.info.secure_url;
                 document.getElementById('act-image').value = imgUrl;
                 document.getElementById('image-preview').src = imgUrl;
                 document.getElementById('image-preview-container').classList.remove('hidden');
+                showPremiumAlert('¡Éxito!', 'Imagen subida correctamente.', 'success');
             }
         });
 
@@ -1583,17 +1597,25 @@ let newsCloudinaryWidget = null;
 function initNewsCloudinary() {
     if (window.cloudinary && !newsCloudinaryWidget) {
         newsCloudinaryWidget = cloudinary.createUploadWidget({
-            cloudName: 'duvsilg9e', 
-            uploadPreset: 'participard_preset',
+            cloudName: CLOUDINARY_CLOUD_NAME, 
+            uploadPreset: CLOUDINARY_PRESET,
             sources: ['local', 'url', 'camera'],
             multiple: false,
-            language: 'es'
+            language: 'es',
+            clientAllowedFormats: ["png", "jpg", "jpeg", "webp"],
+            maxFileSize: 5000000, // 5MB
         }, (error, result) => { 
-            if (!error && result && result.event === "success") { 
+            if (error) {
+                console.error('Cloudinary Error (News):', error);
+                showPremiumAlert('Error de Subida', 'No se pudo subir la imagen de la noticia.', 'error');
+                return;
+            }
+            if (result && result.event === "success") { 
                 const imgUrl = result.info.secure_url;
                 document.getElementById('news-image-url').value = imgUrl;
                 document.getElementById('news-image-preview').src = imgUrl;
                 document.getElementById('news-image-preview-container').classList.remove('hidden');
+                showPremiumAlert('¡Éxito!', 'Imagen de noticia subida correctamente.', 'success');
             }
         });
 
@@ -1807,21 +1829,32 @@ function removeContributorImage() {
     document.getElementById('contributor-image-preview-container').classList.add('hidden');
 }
 
-// Cloudinary para Contribuidores
-const contributorUploadWidget = document.getElementById('contributor_upload_widget');
-if (contributorUploadWidget) {
-    const widget = cloudinary.createUploadWidget({
-        cloudName: 'dmv7v8vqc',
-        uploadPreset: 'participard_preset'
-    }, (error, result) => {
-        if (!error && result && result.event === "success") {
-            const url = result.info.secure_url;
-            document.getElementById('contributor-image').value = url;
-            document.getElementById('contributor-image-preview').src = url;
-            document.getElementById('contributor-image-preview-container').classList.remove('hidden');
-        }
-    });
-    contributorUploadWidget.addEventListener('click', () => widget.open(), false);
+let contributorWidget = null;
+function initContributorCloudinary() {
+    const contributorUploadBtn = document.getElementById('contributor_upload_widget');
+    if (window.cloudinary && contributorUploadBtn && !contributorWidget) {
+        contributorWidget = cloudinary.createUploadWidget({
+            cloudName: CLOUDINARY_CLOUD_NAME,
+            uploadPreset: CLOUDINARY_PRESET,
+            sources: ['local', 'url', 'camera'],
+            multiple: false,
+            language: 'es'
+        }, (error, result) => {
+            if (error) {
+                console.error('Cloudinary Error (Contributor):', error);
+                showPremiumAlert('Error de Subida', 'No se pudo subir la foto del contribuidor.', 'error');
+                return;
+            }
+            if (result && result.event === "success") {
+                const url = result.info.secure_url;
+                document.getElementById('contributor-image').value = url;
+                document.getElementById('contributor-image-preview').src = url;
+                document.getElementById('contributor-image-preview-container').classList.remove('hidden');
+                showPremiumAlert('¡Éxito!', 'Foto de perfil subida correctamente.', 'success');
+            }
+        });
+        contributorUploadBtn.addEventListener('click', () => contributorWidget.open(), false);
+    }
 }
 
 const contributorForm = document.getElementById('contributor-form');
