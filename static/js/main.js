@@ -2,7 +2,7 @@
 // ESTADO Y NAVEGACIÓN
 // ==========================================
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = '/api';
 
 // Efecto de scroll en Navbar
 window.addEventListener('scroll', () => {
@@ -49,6 +49,8 @@ function navigate(page) {
         if (typeof fetchActivities === 'function') fetchActivities();
     } else if (page === 'news') {
         if (typeof fetchNews === 'function') fetchNews();
+    } else if (page === 'about') {
+        if (typeof loadAboutPage === 'function') loadAboutPage();
     }
 
     // Mostrar el footer solo en la página de inicio o noticias
@@ -610,7 +612,7 @@ function switchAdminTab(tab) {
         return;
     }
 
-    ['overview', 'activities', 'users', 'news'].forEach(t => {
+    ['overview', 'activities', 'users', 'news', 'contributors'].forEach(t => {
         const btn = document.getElementById(`tab-${t}`);
         if (btn) {
             btn.classList.remove('bg-emerald-500/10', 'text-emerald-400');
@@ -620,8 +622,8 @@ function switchAdminTab(tab) {
 
     const activeBtn = document.getElementById(`tab-${tab}`);
     if (activeBtn) {
-        activeBtn.classList.remove('text-white/50', 'hover:bg-white/5', 'hover:text-white');
         activeBtn.classList.add('bg-emerald-500/10', 'text-emerald-400');
+        activeBtn.classList.remove('text-white/50');
     }
 }
 
@@ -646,12 +648,13 @@ async function loadAdminData() {
     document.getElementById('admin-name').innerText = currentUser.fullName;
 
     try {
-        const [usersRes, actRes, instRes, recentRes, newsRes] = await Promise.all([
+        const [usersRes, actRes, instRes, recentRes, newsRes, contRes] = await Promise.all([
             fetch(API_URL + '/users'),
             fetch(API_URL + '/activities?all=true'),
             fetch(API_URL + '/institutions'),
             fetch(API_URL + '/recent_activity'),
-            fetch(API_URL + '/news')
+            fetch(API_URL + '/news'),
+            fetch(API_URL + '/contributors')
         ]);
         
         const users = await usersRes.json();
@@ -659,6 +662,7 @@ async function loadAdminData() {
         adminInstitutions = await instRes.json();
         const recentActivity = await recentRes.json();
         const news = await newsRes.json();
+        const contributors = await contRes.json();
         
         document.getElementById('stat-users').innerText = users.length;
         document.getElementById('stat-activities').innerText = activities.length;
@@ -730,6 +734,9 @@ async function loadAdminData() {
         if (window.lucide) window.lucide.createIcons();
         initCloudinary();
         initNewsCloudinary();
+
+        // RENDER CONTRIBUTORS TABLE (Missing call!)
+        renderAdminContributors(contributors);
 
     } catch (err) {
         console.error(err);
@@ -1720,6 +1727,239 @@ async function deleteNews(id) {
             loadAdminData();
         } catch (err) {
             console.error(err);
+        }
+    }
+}
+
+// ==========================================
+// CONTRIBUTORS MANAGEMENT
+// ==========================================
+
+function renderAdminContributors(contributors) {
+    const list = document.getElementById('admin-contributors-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    contributors.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-white/5 transition-colors group';
+        tr.innerHTML = `
+            <td class="px-6 py-4">
+                <div class="flex items-center gap-3">
+                    <img src="${c.image_url || 'https://via.placeholder.com/150'}" class="w-10 h-10 rounded-full border border-white/10" alt="${c.name}">
+                    <span class="font-medium text-white">${c.name}</span>
+                </div>
+            </td>
+            <td class="px-6 py-4 text-white/70">${c.role}</td>
+            <td class="px-6 py-4">
+                <span class="px-2 py-1 rounded-md bg-white/5 text-white/50 border border-white/10 text-xs font-medium">${c.category}</span>
+            </td>
+            <td class="px-6 py-4 text-white/70">${c.order || 0}</td>
+            <td class="px-6 py-4 text-right">
+                <div class="flex justify-end gap-2">
+                    <button onclick='editContributor(${JSON.stringify(c).replace(/'/g, "&#39;")})' class="p-2 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-all" title="Editar">
+                        <i data-lucide="edit-2" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="deleteContributor(${c.id})" class="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-all" title="Eliminar">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        list.appendChild(tr);
+    });
+    if (window.lucide) window.lucide.createIcons();
+}
+
+function openContributorModal() {
+    document.getElementById('contributor-id').value = '';
+    document.getElementById('contributor-form').reset();
+    document.getElementById('contributor-image-preview-container').classList.add('hidden');
+    document.getElementById('modal-contributor-title').innerText = 'Nuevo Contribuidor';
+    document.getElementById('contributor-modal').classList.remove('hidden');
+}
+
+function closeContributorModal() {
+    document.getElementById('contributor-modal').classList.add('hidden');
+}
+
+function editContributor(c) {
+    document.getElementById('contributor-id').value = c.id;
+    document.getElementById('contributor-name').value = c.name;
+    document.getElementById('contributor-role').value = c.role;
+    document.getElementById('contributor-category').value = c.category;
+    document.getElementById('contributor-order').value = c.order;
+    document.getElementById('contributor-image').value = c.image_url || '';
+    
+    if (c.image_url) {
+        document.getElementById('contributor-image-preview').src = c.image_url;
+        document.getElementById('contributor-image-preview-container').classList.remove('hidden');
+    } else {
+        document.getElementById('contributor-image-preview-container').classList.add('hidden');
+    }
+    
+    document.getElementById('modal-contributor-title').innerText = 'Editar Contribuidor';
+    document.getElementById('contributor-modal').classList.remove('hidden');
+}
+
+function removeContributorImage() {
+    document.getElementById('contributor-image').value = '';
+    document.getElementById('contributor-image-preview-container').classList.add('hidden');
+}
+
+// Cloudinary para Contribuidores
+const contributorUploadWidget = document.getElementById('contributor_upload_widget');
+if (contributorUploadWidget) {
+    const widget = cloudinary.createUploadWidget({
+        cloudName: 'dmv7v8vqc',
+        uploadPreset: 'participard_preset'
+    }, (error, result) => {
+        if (!error && result && result.event === "success") {
+            const url = result.info.secure_url;
+            document.getElementById('contributor-image').value = url;
+            document.getElementById('contributor-image-preview').src = url;
+            document.getElementById('contributor-image-preview-container').classList.remove('hidden');
+        }
+    });
+    contributorUploadWidget.addEventListener('click', () => widget.open(), false);
+}
+
+const contributorForm = document.getElementById('contributor-form');
+if (contributorForm) {
+    contributorForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('contributor-id').value;
+        const body = {
+            name: document.getElementById('contributor-name').value,
+            role: document.getElementById('contributor-role').value,
+            category: document.getElementById('contributor-category').value,
+            order: parseInt(document.getElementById('contributor-order').value) || 0,
+            image_url: document.getElementById('contributor-image').value || null
+        };
+
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? `${API_URL}/contributors/${id}` : `${API_URL}/contributors`;
+
+        try {
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) throw new Error('Error saving contributor');
+            
+            Swal.fire({
+                title: '¡Éxito!',
+                text: id ? 'Contribuidor actualizado.' : 'Contribuidor creado con éxito.',
+                icon: 'success',
+                background: '#0a0f1e',
+                color: '#fff'
+            });
+            
+            closeContributorModal();
+            loadAdminData();
+        } catch (err) {
+            console.error(err);
+            Swal.fire('Error', 'No se pudo guardar el contribuidor.', 'error');
+        }
+    });
+}
+
+async function deleteContributor(id) {
+    if (confirm('¿Seguro que deseas eliminar este contribuidor?')) {
+        try {
+            await fetch(`${API_URL}/contributors/${id}`, { method: 'DELETE' });
+            loadAdminData();
+        } catch (err) {
+            console.error(err);
+        }
+    }
+}
+
+// ==========================================
+// PUBLIC ABOUT PAGE RENDERING
+// ==========================================
+
+async function loadAboutPage() {
+    try {
+        console.log('Fetching contributors...');
+        const res = await fetch('/api/contributors');
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        
+        const contributors = await res.json();
+        console.log('Contributors received:', contributors);
+        
+        const aboutContainer = document.getElementById('view-about');
+        if (!aboutContainer) {
+            console.error('view-about container not found');
+            return;
+        }
+
+        // Cabecera de Contribuidores
+        let html = `
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <div class="text-center mb-16">
+                    <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-6">Nuestros <span class="text-emerald-400">Contribuidores</span></h1>
+                </div>
+        `;
+
+        if (!Array.isArray(contributors) || contributors.length === 0) {
+            console.log('No contributors found in API response');
+            html += `
+                <div class="text-center py-12">
+                    <p class="text-white/40 italic">Todavía no se han agregado contribuidores.</p>
+                </div>
+            `;
+        } else {
+            const categories = [...new Set(contributors.map(c => c.category))];
+            
+            categories.forEach(cat => {
+                const catContributors = contributors.filter(c => c.category === cat);
+                html += `
+                    <div class="mb-20">
+                        <h2 class="text-2xl font-bold text-white mb-8 flex items-center gap-3">
+                            <span class="w-8 h-1 bg-emerald-500 rounded-full"></span>
+                            ${cat || 'Colaboradores'}
+                        </h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                `;
+
+                catContributors.forEach(c => {
+                    html += `
+                        <div class="glass-card p-6 rounded-3xl border border-white/5 hover:border-emerald-500/30 transition-all duration-300 group">
+                            <div class="flex flex-col items-center text-center">
+                                <div class="relative mb-6">
+                                    <div class="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full blur opacity-10 group-hover:opacity-30 transition-all duration-500"></div>
+                                    <img src="${c.image_url || 'https://via.placeholder.com/150'}" class="relative w-24 h-24 rounded-full object-cover border-2 border-white/10" alt="${c.name}">
+                                </div>
+                                <h3 class="text-lg font-bold text-white mb-1">${c.name}</h3>
+                                <p class="text-emerald-400 text-sm font-medium mb-4 uppercase tracking-wider">${c.role}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        html += `</div>`;
+        aboutContainer.innerHTML = html;
+        console.log('About page rendered successfully');
+
+    } catch (err) {
+        console.error('Error loading about page:', err);
+        const aboutContainer = document.getElementById('view-about');
+        if (aboutContainer) {
+            aboutContainer.innerHTML = `
+                <div class="max-w-4xl mx-auto px-4 py-12 text-center">
+                    <p class="text-red-400 font-bold">Error al cargar la información</p>
+                    <p class="text-white/30 text-xs mt-2">${err.message}</p>
+                </div>
+            `;
         }
     }
 }

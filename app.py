@@ -739,6 +739,74 @@ def get_recent_activity():
         print(f"[ERROR Recent Activity]: {e}")
         return jsonify({"error": "Error obteniendo actividad reciente."}), 500
 
+# ================= CONTRIBUTORS API =================
+
+@app.route('/api/contributors', methods=['GET'])
+def get_contributors():
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT ContribuidorID as id, Nombre as name, Rol as role, Categoria as category, ImagenURL as image_url, Orden as [order] FROM tblContribuidores ORDER BY Orden ASC, Nombre ASC")
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(results), 200
+    except Exception as e:
+        print(f"[ERROR Get Contributors]: {e}")
+        return jsonify({"error": "Error obteniendo contribuidores."}), 500
+
+@app.route('/api/contributors', methods=['POST'])
+def create_contributor():
+    data = request.json
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO tblContribuidores (Nombre, Rol, Categoria, ImagenURL, Orden)
+            OUTPUT inserted.ContribuidorID
+            VALUES (?, ?, ?, ?, ?)
+        """, (data.get('name'), data.get('role'), data.get('category'), 
+              data.get('image_url'), data.get('order', 0)))
+        new_id = cursor.fetchone()[0]
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Contribuidor creado exitosamente", "id": new_id}), 201
+    except Exception as e:
+        print(f"[ERROR Create Contributor]: {e}")
+        return jsonify({"error": "Error creando contribuidor"}), 500
+
+@app.route('/api/contributors/<int:id>', methods=['PUT'])
+def update_contributor(id):
+    data = request.json
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE tblContribuidores 
+            SET Nombre=?, Rol=?, Categoria=?, ImagenURL=?, Orden=?
+            WHERE ContribuidorID=?
+        """, (data.get('name'), data.get('role'), data.get('category'), 
+              data.get('image_url'), data.get('order', 0), id))
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Contribuidor actualizado"}), 200
+    except Exception as e:
+        print(f"[ERROR Update Contributor]: {e}")
+        return jsonify({"error": "Error actualizando contribuidor"}), 500
+
+@app.route('/api/contributors/<int:id>', methods=['DELETE'])
+def delete_contributor(id):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM tblContribuidores WHERE ContribuidorID = ?", (id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Contribuidor eliminado"}), 200
+    except Exception as e:
+        print(f"[ERROR Delete Contributor]: {e}")
+        return jsonify({"error": "Error eliminando contribuidor"}), 500
+
 if __name__ == '__main__':
     print("========================================")
     print(">>> SERVIDOR FLASK (PYTHON) INICIADO EN PUERTO 5000")
