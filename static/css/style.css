@@ -134,4 +134,48 @@
   .bg-white\/12 { background-color: rgba(255,255,255,0.12); }
   .border-white\/6  { border-color: rgba(255,255,255,0.06); }
   .border-white\/8  { border-color: rgba(255,255,255,0.08); }
+
+  /* Activity Detail View (Meetup-style) */
+  .detail-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background-color: #080d1a;
+    overflow-y: auto;
+    animation: slideUp 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .detail-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 4rem 1.5rem 10rem 1.5rem;
+    position: relative;
+    z-index: 10;
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4rem;
+  }
+
+  @media (min-width: 1024px) {
+    .detail-grid {
+      grid-template-columns: 1fr 360px;
+    }
+  }
+
+  .sticky-sidebar {
+    position: sticky;
+    top: 7rem;
+    height: fit-content;
+    transition: all 0.3s ease;
+  }
+
+
 }

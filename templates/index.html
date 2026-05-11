@@ -492,68 +492,108 @@
         </div>
     </div>
 
-    <!-- ================= PUBLIC ACTIVITY MODAL ================= -->
-    <div id="public-activity-modal"
-        class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-        <div
-            class="glass-panel relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-[0_0_50px_rgba(16,185,129,0.15)] flex flex-col">
-            <!-- Header Image -->
-            <div id="public-activity-image-container"
-                class="h-48 w-full relative overflow-hidden shrink-0 rounded-t-3xl hidden">
-                <img id="public-activity-image" src="" class="w-full h-full object-cover" alt="Actividad">
-                <div class="absolute inset-0 bg-gradient-to-t from-[#080d1a] to-transparent"></div>
+    <!-- ================= PUBLIC ACTIVITY DETAIL VIEW (Full Screen) ================= -->
+    <div id="public-activity-modal" class="hidden detail-overlay">
+        <!-- Background Decoration -->
+        <div class="fixed inset-0 overflow-hidden pointer-events-none opacity-50">
+            <div class="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-emerald-500/10 rounded-full blur-[120px]"></div>
+            <div class="absolute top-[20%] -right-[10%] w-[30%] h-[30%] bg-blue-500/10 rounded-full blur-[100px]"></div>
+        </div>
+        
+        <!-- Close / Back Button -->
+        <div class="fixed top-0 left-0 right-0 z-[120] bg-[#080d1a]/80 backdrop-blur-md border-b border-white/5">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center">
+                <button onclick="closePublicActivityModal()" class="flex items-center gap-2 text-white/70 hover:text-white transition-all font-medium">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                    Volver a actividades
+                </button>
+            </div>
+        </div>
+
+        <div class="detail-container mt-16">
+            <!-- Header Section -->
+            <div class="mb-8" data-aos="fade-up">
+                <div id="public-activity-type" class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-4">
+                    <i data-lucide="tag" class="w-3 h-3"></i>
+                    <span>Tipo</span>
+                </div>
+                <h1 id="public-activity-title" class="text-4xl sm:text-5xl font-extrabold text-white leading-tight mb-4">Título de la Actividad</h1>
+                <div class="flex items-center gap-3 p-3 rounded-2xl bg-white/5 border border-white/5 w-fit">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
+                        <i data-lucide="building" class="w-5 h-5 text-emerald-400"></i>
+                    </div>
+                    <div>
+                        <p class="text-[10px] text-white/40 uppercase tracking-widest font-bold">Organizado por</p>
+                        <p id="public-activity-inst" class="text-white font-semibold">Nombre Institución</p>
+                    </div>
+                </div>
             </div>
 
-            <button onclick="closePublicActivityModal()"
-                class="absolute top-4 right-4 z-10 p-2 text-white/70 hover:text-white bg-black/20 hover:bg-black/40 rounded-full transition-all">
-                <i data-lucide="x" class="w-5 h-5"></i>
-            </button>
-
-            <div class="p-8 flex-1 flex flex-col">
-                <div class="flex flex-wrap gap-2 mb-4">
-                    <div id="public-activity-type"
-                        class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold uppercase tracking-wider">
-                        <i data-lucide="tag" class="w-3 h-3"></i>
-                        Tipo
+            <!-- Main Content Grid -->
+            <div class="detail-grid">
+                <!-- Left Column: Media & Description -->
+                <div class="space-y-8" data-aos="fade-right">
+                    <div id="public-activity-image-container" class="rounded-3xl overflow-hidden border border-white/10 shadow-2xl hidden">
+                        <img id="public-activity-image" src="" class="w-full h-auto object-cover max-h-[500px]" alt="Actividad">
                     </div>
-                    <div id="public-activity-province"
-                        class="px-2 py-1 rounded bg-white/5 text-white/70 border border-white/5 text-xs font-medium flex items-center gap-1">
-                        <i data-lucide="map-pin" class="w-3 h-3"></i>
-                        Provincia
-                    </div>
-                </div>
-
-                <h2 id="public-activity-title" class="text-3xl font-extrabold text-white mb-6 leading-tight">Título</h2>
-
-                <p id="public-activity-desc" class="text-white/70 text-base leading-relaxed mb-8">Descripción</p>
-
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 bg-white/5 p-4 rounded-xl border border-white/5">
-                    <div class="flex items-center gap-3 text-white/80">
-                        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
-                            <i data-lucide="building" class="w-5 h-5 text-emerald-400"></i>
-                        </div>
-                        <div>
-                            <p class="text-[10px] text-white/40 uppercase tracking-wider font-semibold">Institución</p>
-                            <span id="public-activity-inst" class="font-medium text-sm">Nombre Institución</span>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 text-white/80">
-                        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
-                            <i data-lucide="calendar" class="w-5 h-5 text-emerald-400"></i>
-                        </div>
-                        <div>
-                            <p id="public-activity-date-label" class="text-[10px] text-white/40 uppercase tracking-wider font-semibold">Fecha de cierre</p>
-                            <span id="public-activity-date" class="font-medium text-sm">Fecha</span>
+                    
+                    <div class="space-y-6">
+                        <h3 class="text-2xl font-bold text-white flex items-center gap-2">
+                            <i data-lucide="align-left" class="w-6 h-6 text-emerald-400"></i>
+                            Sobre esta actividad
+                        </h3>
+                        <div id="public-activity-desc" class="text-white/70 text-lg leading-relaxed whitespace-pre-line">
+                            Descripción detallada...
                         </div>
                     </div>
                 </div>
 
-                <div class="mt-auto pt-6 border-t border-white/10" id="public-activity-action-container">
-                    <button id="public-activity-enroll-btn"
-                        class="w-full btn-premium py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-all flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)]">
-                        <i data-lucide="check-circle" class="w-5 h-5"></i>
-                        Inscribirme ahora
-                    </button>
+                <!-- Right Column: Sticky Sidebar -->
+                <div class="space-y-6" data-aos="fade-left">
+                    <div class="sticky-sidebar space-y-6">
+                        <div class="glass-card p-6 rounded-3xl space-y-6">
+                            <h4 class="text-white font-bold text-lg mb-2">Detalles clave</h4>
+                            
+                            <div class="flex items-start gap-4">
+                                <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 border border-emerald-500/20">
+                                    <i data-lucide="calendar" class="w-5 h-5 text-emerald-400"></i>
+                                </div>
+                                <div>
+                                    <p id="public-activity-date-label" class="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-0.5">Fecha de cierre</p>
+                                    <p id="public-activity-date" class="text-white font-medium">10 de Mayo, 2026</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4">
+                                <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 border border-emerald-500/20">
+                                    <i data-lucide="map-pin" class="w-5 h-5 text-emerald-400"></i>
+                                </div>
+                                <div>
+                                    <p class="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-0.5">Ubicación</p>
+                                    <p id="public-activity-province" class="text-white font-medium">Provincia, República Dominicana</p>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4">
+                                <div class="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 border border-emerald-500/20">
+                                    <i data-lucide="globe" class="w-5 h-5 text-emerald-400"></i>
+                                </div>
+                                <div>
+                                    <p class="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-0.5">Visibilidad</p>
+                                    <p class="text-white font-medium">Público Estudiantil</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        </div>
+                        <!-- Enrollment Button Card -->
+                        <div id="public-activity-action-container" class="glass-card p-6 rounded-3xl">
+                            <button id="public-activity-enroll-btn" class="w-full btn-premium py-3 px-8 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-all flex justify-center items-center gap-2 shadow-[0_0_25px_rgba(16,185,129,0.4)]">
+                                <i data-lucide="check-circle" class="w-5 h-5"></i>
+                                Inscribirme ahora
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

@@ -523,17 +523,24 @@ function openPublicActivityModal(activityId) {
         return;
     }
 
-    document.getElementById('public-activity-title').innerText = act.title;
-    document.getElementById('public-activity-desc').innerText = act.description;
-    document.getElementById('public-activity-type').innerHTML = act.type_id;
-    document.getElementById('public-activity-province').innerHTML = act.province;
-    document.getElementById('public-activity-inst').innerText = act.institution_name || 'Desconocida';
-    
     const isEndDateModal = !!act.end_date;
     const displayDateModal = isEndDateModal ? act.end_date : act.start_date;
     const dateStr = displayDateModal ? new Date(displayDateModal).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
+
+    document.getElementById('public-activity-title').innerText = act.title;
+    document.getElementById('public-activity-desc').innerText = act.description;
+    
+    // Type handling
+    const typeEl = document.getElementById('public-activity-type');
+    if (typeEl) {
+        typeEl.querySelector('span').innerText = act.type_id || 'Actividad';
+    }
+    
+    document.getElementById('public-activity-province').innerHTML = act.province;
+    document.getElementById('public-activity-inst').innerText = act.institution_name || 'Desconocida';
     document.getElementById('public-activity-date').innerText = dateStr;
     
+    // Labels
     const modalDateLabel = document.getElementById('public-activity-date-label');
     if (modalDateLabel) {
         modalDateLabel.innerText = isEndDateModal ? 'Fecha de cierre' : (act.start_date ? 'Fecha de inicio' : 'Fecha');
@@ -545,39 +552,39 @@ function openPublicActivityModal(activityId) {
         imgEl.src = act.image_url;
         imgContainer.classList.remove('hidden');
     } else {
-        imgEl.src = '';
         imgContainer.classList.add('hidden');
     }
 
-    // Wire up enroll button — clone to remove any stale listeners, then remove onclick attr
-    const enrollBtn = document.getElementById('public-activity-enroll-btn');
-    if (enrollBtn) {
-        const newBtn = enrollBtn.cloneNode(true);
-        newBtn.removeAttribute('onclick'); // prevent any stale onclick firing
-        
-        if (act.official_url) {
-            newBtn.innerHTML = `<i data-lucide="external-link" class="w-5 h-5"></i> Ir al sitio oficial`;
-            newBtn.className = "w-full btn-premium py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-all flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)]";
-            newBtn.addEventListener('click', () => {
-                window.open(act.official_url, '_blank');
-            });
-        } else {
-            newBtn.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5"></i> Inscribirme ahora`;
-            newBtn.className = "w-full btn-premium py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-all flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)]";
-            newBtn.addEventListener('click', () => {
-                enrollActivity(act.id);
-            });
-        }
-        
-        enrollBtn.parentNode.replaceChild(newBtn, enrollBtn);
-    }
+    const modal = document.getElementById('public-activity-modal');
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; // Lock scroll
 
-    document.getElementById('public-activity-modal').classList.remove('hidden');
+    // Wire up enroll button
+    const container = document.getElementById('public-activity-action-container');
+    container.innerHTML = ''; // Clear
+    
+    const btn = document.createElement('button');
+    btn.id = 'public-activity-enroll-btn';
+    btn.className = 'w-full sm:w-64 btn-premium py-3 px-8 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-all flex justify-center items-center gap-2 shadow-[0_0_25px_rgba(16,185,129,0.4)]';
+    
+    if (act.official_url) {
+        btn.innerHTML = `<i data-lucide="external-link" class="w-5 h-5"></i> Ir al sitio oficial`;
+        btn.onclick = () => window.open(act.official_url, '_blank');
+    } else {
+        btn.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5"></i> Inscribirme ahora`;
+        btn.onclick = () => enrollActivity(act.id);
+    }
+    
+    container.appendChild(btn);
+    
     if (window.lucide) window.lucide.createIcons();
+    if (window.AOS) window.AOS.refresh();
 }
 
 function closePublicActivityModal() {
-    document.getElementById('public-activity-modal').classList.add('hidden');
+    const modal = document.getElementById('public-activity-modal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = 'auto'; // Unlock scroll
 }
 
 // ==========================================
