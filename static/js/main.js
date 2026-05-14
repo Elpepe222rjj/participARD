@@ -168,9 +168,13 @@ function updateAuthForm() {
     if (isLoginMode) {
         document.getElementById('group-name').classList.add('hidden');
         document.getElementById('auth-name').removeAttribute('required');
+        document.getElementById('group-confirm-password').classList.add('hidden');
+        document.getElementById('auth-confirm-password').removeAttribute('required');
     } else {
         document.getElementById('group-name').classList.remove('hidden');
         document.getElementById('auth-name').setAttribute('required', 'true');
+        document.getElementById('group-confirm-password').classList.remove('hidden');
+        document.getElementById('auth-confirm-password').setAttribute('required', 'true');
     }
 }
 
@@ -258,7 +262,7 @@ if (authForm) {
         errorContainer.classList.add('hidden');
         successContainer.classList.add('hidden');
 
-        if (password !== confirmPassword) {
+        if (!isLoginMode && password !== confirmPassword) {
             showPremiumAlert('Error de Validación', 'Las contraseñas no coinciden. Por favor, verifícalas.', 'error');
             return;
         }
@@ -279,6 +283,14 @@ if (authForm) {
                     startLockoutCountdown(data.seconds_remaining);
                     return;
                 }
+                
+                // Show login errors in the inline div for better visibility of attempts
+                if (isLoginMode) {
+                    errorContainer.classList.remove('hidden');
+                    errorMsg.innerHTML = `<strong>Error de Acceso:</strong><br>${data.error}`;
+                    return;
+                }
+                
                 throw new Error(data.error);
             }
             
@@ -304,7 +316,12 @@ if (authForm) {
                 toggleAuthMode();
             }
         } catch (err) {
-            showPremiumAlert('Error de Acceso', err.message, 'error');
+            if (isLoginMode) {
+                errorContainer.classList.remove('hidden');
+                errorMsg.innerHTML = `<strong>Error:</strong> ${err.message}`;
+            } else {
+                showPremiumAlert('Error', err.message, 'error');
+            }
         }
     });
 }
