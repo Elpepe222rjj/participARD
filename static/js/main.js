@@ -2,7 +2,12 @@
 // ESTADO Y NAVEGACIÓN
 // ==========================================
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = '/api';
+
+// Cloudinary Configuration
+const CLOUDINARY_CLOUD_NAME = 'duvsilg9e'; 
+const CLOUDINARY_PRESET = 'participard_preset';
+
 
 // Efecto de scroll en Navbar
 window.addEventListener('scroll', () => {
@@ -49,6 +54,8 @@ function navigate(page) {
         if (typeof fetchActivities === 'function') fetchActivities();
     } else if (page === 'news') {
         if (typeof fetchNews === 'function') fetchNews();
+    } else if (page === 'about') {
+        if (typeof loadAboutPage === 'function') loadAboutPage();
     }
 
     // Mostrar el footer solo en la página de inicio o noticias
@@ -161,9 +168,13 @@ function updateAuthForm() {
     if (isLoginMode) {
         document.getElementById('group-name').classList.add('hidden');
         document.getElementById('auth-name').removeAttribute('required');
+        document.getElementById('group-confirm-password').classList.add('hidden');
+        document.getElementById('auth-confirm-password').removeAttribute('required');
     } else {
         document.getElementById('group-name').classList.remove('hidden');
         document.getElementById('auth-name').setAttribute('required', 'true');
+        document.getElementById('group-confirm-password').classList.remove('hidden');
+        document.getElementById('auth-confirm-password').setAttribute('required', 'true');
     }
 }
 
@@ -251,7 +262,7 @@ if (authForm) {
         errorContainer.classList.add('hidden');
         successContainer.classList.add('hidden');
 
-        if (password !== confirmPassword) {
+        if (!isLoginMode && password !== confirmPassword) {
             showPremiumAlert('Error de Validación', 'Las contraseñas no coinciden. Por favor, verifícalas.', 'error');
             return;
         }
@@ -272,6 +283,14 @@ if (authForm) {
                     startLockoutCountdown(data.seconds_remaining);
                     return;
                 }
+                
+                // Show login errors in the inline div for better visibility of attempts
+                if (isLoginMode) {
+                    errorContainer.classList.remove('hidden');
+                    errorMsg.innerHTML = `<strong>Error de Acceso:</strong><br>${data.error}`;
+                    return;
+                }
+                
                 throw new Error(data.error);
             }
             
@@ -297,7 +316,12 @@ if (authForm) {
                 toggleAuthMode();
             }
         } catch (err) {
-            showPremiumAlert('Error de Acceso', err.message, 'error');
+            if (isLoginMode) {
+                errorContainer.classList.remove('hidden');
+                errorMsg.innerHTML = `<strong>Error:</strong> ${err.message}`;
+            } else {
+                showPremiumAlert('Error', err.message, 'error');
+            }
         }
     });
 }
@@ -324,9 +348,20 @@ async function fetchActivities(type = 'all') {
             const subAct = activities.length > 1 ? activities[1] : mainAct;
 
             const today = new Date();
-            const endDateMain = new Date(mainAct.end_date);
-            const diffTimeMain = endDateMain - today;
-            const daysLeftMain = Math.ceil(diffTimeMain / (1000 * 60 * 60 * 24));
+            let daysLeftMainText = 'Cerrada';
+            if (mainAct.end_date) {
+                const endDateMain = new Date(mainAct.end_date);
+                const diffTimeMain = endDateMain - today;
+                const daysLeftMain = Math.ceil(diffTimeMain / (1000 * 60 * 60 * 24));
+                daysLeftMainText = daysLeftMain > 0 ? `Cierra en ${daysLeftMain} días` : 'Cerrada';
+            } else if (mainAct.start_date) {
+                const startDateMain = new Date(mainAct.start_date);
+                const diffTimeMain = startDateMain - today;
+                const daysLeftMain = Math.ceil(diffTimeMain / (1000 * 60 * 60 * 24));
+                daysLeftMainText = daysLeftMain > 0 ? `Inicia en ${daysLeftMain} días` : 'Iniciada';
+            } else {
+                daysLeftMainText = 'Fecha no definida';
+            }
             
             const elType = document.getElementById('hero-main-type');
             if (elType) {
@@ -334,7 +369,7 @@ async function fetchActivities(type = 'all') {
                 document.getElementById('hero-main-title').innerText = mainAct.title;
                 document.getElementById('hero-main-inst').innerText = mainAct.institution_name || 'Institución Destacada';
                 document.getElementById('hero-main-location').innerText = (mainAct.location && mainAct.province) ? `${mainAct.location}, ${mainAct.province}` : (mainAct.province || 'República Dominicana');
-                document.getElementById('hero-main-date').innerText = daysLeftMain > 0 ? `Cierra en ${daysLeftMain} días` : 'Cerrada';
+                document.getElementById('hero-main-date').innerText = daysLeftMainText;
 
                 document.getElementById('hero-sub-type').innerText = subAct.type_id || 'Actividad';
                 document.getElementById('hero-sub-title').innerText = subAct.title;
@@ -388,7 +423,10 @@ function renderActivitiesGrid() {
     }
     
     filteredActivities.forEach(act => {
-        const date = act.end_date ? new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'No definida';
+        const isEndDate = !!act.end_date;
+        const displayDate = isEndDate ? act.end_date : act.start_date;
+        const date = displayDate ? new Date(displayDate).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'No definida';
+        const dateLabel = isEndDate ? 'Cierre:' : (act.start_date ? 'Inicio:' : 'Fecha:');
         
         const showAction = !currentUser || currentUser.role === 'Rol_Estudiantes';
         const actionHtml = showAction ? `
@@ -432,7 +470,7 @@ function renderActivitiesGrid() {
                         <div class="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
                             <i data-lucide="calendar" class="w-4 h-4 text-emerald-400"></i>
                         </div>
-                        <span class="font-medium">Cierre: ${date}</span>
+                        <span class="font-medium">${dateLabel} ${date}</span>
                     </div>
                 </div>
                 ${actionHtml}
@@ -509,14 +547,28 @@ function openPublicActivityModal(activityId) {
         return;
     }
 
+    const isEndDateModal = !!act.end_date;
+    const displayDateModal = isEndDateModal ? act.end_date : act.start_date;
+    const dateStr = displayDateModal ? new Date(displayDateModal).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
+
     document.getElementById('public-activity-title').innerText = act.title;
     document.getElementById('public-activity-desc').innerText = act.description;
-    document.getElementById('public-activity-type').innerHTML = act.type_id;
+    
+    // Type handling
+    const typeEl = document.getElementById('public-activity-type');
+    if (typeEl) {
+        typeEl.querySelector('span').innerText = act.type_id || 'Actividad';
+    }
+    
     document.getElementById('public-activity-province').innerHTML = act.province;
     document.getElementById('public-activity-inst').innerText = act.institution_name || 'Desconocida';
-    
-    const dateStr = act.end_date ? new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
     document.getElementById('public-activity-date').innerText = dateStr;
+    
+    // Labels
+    const modalDateLabel = document.getElementById('public-activity-date-label');
+    if (modalDateLabel) {
+        modalDateLabel.innerText = isEndDateModal ? 'Fecha de cierre' : (act.start_date ? 'Fecha de inicio' : 'Fecha');
+    }
 
     const imgContainer = document.getElementById('public-activity-image-container');
     const imgEl = document.getElementById('public-activity-image');
@@ -524,39 +576,39 @@ function openPublicActivityModal(activityId) {
         imgEl.src = act.image_url;
         imgContainer.classList.remove('hidden');
     } else {
-        imgEl.src = '';
         imgContainer.classList.add('hidden');
     }
 
-    // Wire up enroll button — clone to remove any stale listeners, then remove onclick attr
-    const enrollBtn = document.getElementById('public-activity-enroll-btn');
-    if (enrollBtn) {
-        const newBtn = enrollBtn.cloneNode(true);
-        newBtn.removeAttribute('onclick'); // prevent any stale onclick firing
-        
-        if (act.official_url) {
-            newBtn.innerHTML = `<i data-lucide="external-link" class="w-5 h-5"></i> Ir al sitio oficial`;
-            newBtn.className = "w-full btn-premium py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-all flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)]";
-            newBtn.addEventListener('click', () => {
-                window.open(act.official_url, '_blank');
-            });
-        } else {
-            newBtn.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5"></i> Inscribirme ahora`;
-            newBtn.className = "w-full btn-premium py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-all flex justify-center items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)]";
-            newBtn.addEventListener('click', () => {
-                enrollActivity(act.id);
-            });
-        }
-        
-        enrollBtn.parentNode.replaceChild(newBtn, enrollBtn);
-    }
+    const modal = document.getElementById('public-activity-modal');
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden'; // Lock scroll
 
-    document.getElementById('public-activity-modal').classList.remove('hidden');
+    // Wire up enroll button
+    const container = document.getElementById('public-activity-action-container');
+    container.innerHTML = ''; // Clear
+    
+    const btn = document.createElement('button');
+    btn.id = 'public-activity-enroll-btn';
+    btn.className = 'w-full sm:w-64 btn-premium py-3 px-8 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-all flex justify-center items-center gap-2 shadow-[0_0_25px_rgba(16,185,129,0.4)]';
+    
+    if (act.official_url) {
+        btn.innerHTML = `<i data-lucide="external-link" class="w-5 h-5"></i> Ir al sitio oficial`;
+        btn.onclick = () => window.open(act.official_url, '_blank');
+    } else {
+        btn.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5"></i> Inscribirme ahora`;
+        btn.onclick = () => enrollActivity(act.id);
+    }
+    
+    container.appendChild(btn);
+    
     if (window.lucide) window.lucide.createIcons();
+    if (window.AOS) window.AOS.refresh();
 }
 
 function closePublicActivityModal() {
-    document.getElementById('public-activity-modal').classList.add('hidden');
+    const modal = document.getElementById('public-activity-modal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = 'auto'; // Unlock scroll
 }
 
 // ==========================================
@@ -582,7 +634,7 @@ function switchAdminTab(tab) {
         return;
     }
 
-    ['overview', 'activities', 'users', 'news'].forEach(t => {
+    ['overview', 'activities', 'users', 'news', 'contributors'].forEach(t => {
         const btn = document.getElementById(`tab-${t}`);
         if (btn) {
             btn.classList.remove('bg-emerald-500/10', 'text-emerald-400');
@@ -592,8 +644,8 @@ function switchAdminTab(tab) {
 
     const activeBtn = document.getElementById(`tab-${tab}`);
     if (activeBtn) {
-        activeBtn.classList.remove('text-white/50', 'hover:bg-white/5', 'hover:text-white');
         activeBtn.classList.add('bg-emerald-500/10', 'text-emerald-400');
+        activeBtn.classList.remove('text-white/50');
     }
 }
 
@@ -618,12 +670,13 @@ async function loadAdminData() {
     document.getElementById('admin-name').innerText = currentUser.fullName;
 
     try {
-        const [usersRes, actRes, instRes, recentRes, newsRes] = await Promise.all([
+        const [usersRes, actRes, instRes, recentRes, newsRes, contRes] = await Promise.all([
             fetch(API_URL + '/users'),
             fetch(API_URL + '/activities?all=true'),
             fetch(API_URL + '/institutions'),
             fetch(API_URL + '/recent_activity'),
-            fetch(API_URL + '/news')
+            fetch(API_URL + '/news'),
+            fetch(API_URL + '/contributors')
         ]);
         
         const users = await usersRes.json();
@@ -631,6 +684,7 @@ async function loadAdminData() {
         adminInstitutions = await instRes.json();
         const recentActivity = await recentRes.json();
         const news = await newsRes.json();
+        const contributors = await contRes.json();
         
         document.getElementById('stat-users').innerText = users.length;
         document.getElementById('stat-activities').innerText = activities.length;
@@ -702,6 +756,10 @@ async function loadAdminData() {
         if (window.lucide) window.lucide.createIcons();
         initCloudinary();
         initNewsCloudinary();
+        initContributorCloudinary();
+
+        // RENDER CONTRIBUTORS TABLE (Missing call!)
+        renderAdminContributors(contributors);
 
     } catch (err) {
         console.error(err);
@@ -800,17 +858,25 @@ let cloudinaryWidget = null;
 function initCloudinary() {
     if (window.cloudinary && !cloudinaryWidget) {
         cloudinaryWidget = cloudinary.createUploadWidget({
-            cloudName: 'duvsilg9e', 
-            uploadPreset: 'participard_preset',
+            cloudName: CLOUDINARY_CLOUD_NAME, 
+            uploadPreset: CLOUDINARY_PRESET,
             sources: ['local', 'url', 'camera'],
             multiple: false,
-            language: 'es'
+            language: 'es',
+            clientAllowedFormats: ["png", "jpg", "jpeg", "webp"],
+            maxFileSize: 5000000, // 5MB
         }, (error, result) => { 
-            if (!error && result && result.event === "success") { 
+            if (error) {
+                console.error('Cloudinary Error:', error);
+                showPremiumAlert('Error de Subida', 'No se pudo conectar con Cloudinary. Verifica tu configuración.', 'error');
+                return;
+            }
+            if (result && result.event === "success") { 
                 const imgUrl = result.info.secure_url;
                 document.getElementById('act-image').value = imgUrl;
                 document.getElementById('image-preview').src = imgUrl;
                 document.getElementById('image-preview-container').classList.remove('hidden');
+                showPremiumAlert('¡Éxito!', 'Imagen subida correctamente.', 'success');
             }
         });
 
@@ -1306,9 +1372,10 @@ function renderAdminActivitiesTable(activities) {
 
         let isClosed = false;
         let dateString = 'No definida';
-        if (a.end_date) {
-            const dateObj = new Date(a.end_date);
-            isClosed = dateObj < today;
+        const displayDateAdmin = a.end_date ? a.end_date : a.start_date;
+        if (displayDateAdmin) {
+            const dateObj = new Date(displayDateAdmin);
+            isClosed = a.end_date ? (dateObj < today) : false;
             dateString = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
         }
         const typeNormalized = a.type_id.toLowerCase();
@@ -1448,56 +1515,36 @@ function renderNewsGrid() {
         const dateStr = new Date(n.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
         const initials = n.author_name ? n.author_name.substring(0, 2).toUpperCase() : 'AD';
         
-        const isFeatured = index === 0;
-
         const card = document.createElement('div');
-        if (isFeatured) {
-            card.className = 'col-span-full glass-card group flex flex-col lg:flex-row h-auto lg:h-80 rounded-[2rem] overflow-hidden border border-white/5 hover:border-emerald-500/30 transition-all duration-500 cursor-pointer hover:shadow-[0_0_50px_rgba(16,185,129,0.15)] mb-8';
-        } else {
-            card.className = 'glass-card group flex flex-col h-full rounded-[2rem] overflow-hidden border border-white/5 hover:border-emerald-500/30 transition-all duration-500 cursor-pointer hover:shadow-[0_0_40px_rgba(16,185,129,0.1)]';
-        }
+        card.className = 'glass-card group flex flex-col h-full rounded-3xl overflow-hidden border border-white/5 hover:border-emerald-500/30 transition-all duration-500 cursor-pointer hover:shadow-[0_0_40px_rgba(16,185,129,0.1)]';
         
         card.onclick = () => openNewsDetail(n.id);
         
-        const imgSize = isFeatured ? 'lg:w-1/2' : 'h-56';
-        
         card.innerHTML = `
-            <div class="relative overflow-hidden shrink-0 ${imgSize} w-full h-56 lg:h-full">
+            <div class="relative overflow-hidden shrink-0 h-52 w-full">
                 <img src="${n.image_url || 'https://images.unsplash.com/photo-1585829365234-78d9b6924617?q=80&w=2070&auto=format&fit=crop'}" 
                      class="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110" 
                      alt="${n.title}">
                 <div class="absolute inset-0 bg-gradient-to-t from-[#080d1a] via-transparent to-transparent opacity-60"></div>
-                ${isFeatured ? '<div class="absolute top-6 left-6 px-4 py-1.5 rounded-full bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider shadow-lg">Destacado</div>' : ''}
             </div>
-            <div class="flex-1 p-8 flex flex-col justify-between">
+            <div class="flex-1 p-6 flex flex-col justify-between">
                 <div>
-                    <div class="flex items-center gap-4 mb-4">
-                        <span class="text-emerald-400 text-[11px] font-bold uppercase tracking-widest">${dateStr}</span>
+                    <div class="flex items-center gap-3 mb-3">
+                        <span class="text-emerald-400 text-[10px] font-bold uppercase tracking-widest">${dateStr}</span>
                         <div class="w-1 h-1 rounded-full bg-white/20"></div>
-                        <span class="text-white/40 text-[11px] flex items-center gap-1">
-                            <i data-lucide="eye" class="w-3.5 h-3.5"></i> ${n.views} vistas
+                        <span class="text-white/40 text-[10px] flex items-center gap-1">
+                            <i data-lucide="eye" class="w-3 h-3"></i> ${n.views}
                         </span>
                     </div>
-                    <h3 class="${isFeatured ? 'text-3xl lg:text-4xl' : 'text-xl'} font-bold text-white mb-4 group-hover:text-emerald-400 transition-colors leading-tight line-clamp-3">
+                    <h3 class="text-lg font-bold text-white mb-3 group-hover:text-emerald-400 transition-colors leading-tight line-clamp-2">
                         ${n.title}
                     </h3>
-                    <p class="text-white/50 text-sm leading-relaxed line-clamp-3 mb-6">
+                    <p class="text-white/50 text-xs leading-relaxed line-clamp-3 mb-4">
                         ${n.summary || ''}
                     </p>
-                </div>
-                
-                <div class="flex items-center justify-between pt-6 border-t border-white/10">
-                    <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-emerald-500/20">
-                            ${initials}
-                        </div>
-                        <div class="flex flex-col">
-                            <span class="text-xs font-semibold text-white/90">${n.author_name || 'ParticipaRD'}</span>
-                            <span class="text-[10px] text-white/40">Redacción</span>
-                        </div>
-                    </div>
-                    <div class="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-emerald-500 group-hover:border-emerald-500 transition-all duration-300">
-                        <i data-lucide="arrow-right" class="w-5 h-5 text-emerald-400 group-hover:text-white transition-colors"></i>
+                    <div class="flex items-center gap-2 text-emerald-400 text-xs font-bold group-hover:gap-3 transition-all duration-300">
+                        Leer noticia
+                        <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
                     </div>
                 </div>
             </div>
@@ -1520,47 +1567,42 @@ async function openNewsDetail(id) {
         if (!localStorage.getItem(viewedKey)) {
             fetch(`${API_URL}/news/${id}/view`, { method: 'POST' }).catch(err => console.error(err));
             localStorage.setItem(viewedKey, 'true');
-            n.views++; // Update local object for immediate UI feedback
+            n.views++; // Update local object
             
-            // Update grid views count if visible
             const newsInArray = currentPublicNews.find(item => item.id === id);
             if (newsInArray) newsInArray.views++;
         }
 
+        const dateStr = new Date(n.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+        
         document.getElementById('news-detail-title').innerText = n.title;
-        
-        // Format content: handle double line breaks as paragraphs
-        const formattedContent = n.content.split('\n\n').map(p => `<p class="mb-6">${p.replace(/\n/g, '<br>')}</p>`).join('');
-        document.getElementById('news-detail-content').innerHTML = formattedContent;
-        
-        document.getElementById('news-detail-date').innerText = new Date(n.date).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+        document.getElementById('news-detail-date').innerText = dateStr;
+        document.getElementById('news-detail-date-sidebar').innerText = dateStr;
         document.getElementById('news-detail-views-count').innerText = n.views;
+        document.getElementById('news-detail-content').innerHTML = n.content;
+        document.getElementById('news-detail-image').src = n.image_url || '';
         document.getElementById('news-detail-author-name').innerText = n.author_name || 'ParticipaRD';
         
-        const avatar = document.getElementById('news-detail-author-avatar');
-        avatar.innerText = n.author_name ? n.author_name.substring(0, 2).toUpperCase() : 'AD';
-        
-        const img = document.getElementById('news-detail-image');
-        if (n.image_url) {
-            img.src = n.image_url;
-            document.getElementById('news-detail-hero').classList.remove('hidden');
-        } else {
-            document.getElementById('news-detail-hero').classList.add('hidden');
-        }
+        const initials = n.author_name ? n.author_name.substring(0, 2).toUpperCase() : 'AD';
+        document.getElementById('news-detail-author-avatar').innerText = initials;
 
-        document.getElementById('news-detail-modal').classList.remove('hidden');
-        document.body.style.overflow = 'hidden';
+        const modal = document.getElementById('news-detail-modal');
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden'; // Lock scroll
         
         if (window.lucide) window.lucide.createIcons();
+        if (window.AOS) window.AOS.refresh();
         
     } catch (err) {
-        console.error(err);
+        console.error('Error opening news:', err);
+        Swal.fire('Error', 'No se pudo cargar la noticia.', 'error');
     }
 }
 
 function closeNewsDetail() {
-    document.getElementById('news-detail-modal').classList.add('hidden');
-    document.body.style.overflow = '';
+    const modal = document.getElementById('news-detail-modal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = 'auto'; // Unlock scroll
 }
 
 // ==========================================
@@ -1572,17 +1614,25 @@ let newsCloudinaryWidget = null;
 function initNewsCloudinary() {
     if (window.cloudinary && !newsCloudinaryWidget) {
         newsCloudinaryWidget = cloudinary.createUploadWidget({
-            cloudName: 'duvsilg9e', 
-            uploadPreset: 'participard_preset',
+            cloudName: CLOUDINARY_CLOUD_NAME, 
+            uploadPreset: CLOUDINARY_PRESET,
             sources: ['local', 'url', 'camera'],
             multiple: false,
-            language: 'es'
+            language: 'es',
+            clientAllowedFormats: ["png", "jpg", "jpeg", "webp"],
+            maxFileSize: 5000000, // 5MB
         }, (error, result) => { 
-            if (!error && result && result.event === "success") { 
+            if (error) {
+                console.error('Cloudinary Error (News):', error);
+                showPremiumAlert('Error de Subida', 'No se pudo subir la imagen de la noticia.', 'error');
+                return;
+            }
+            if (result && result.event === "success") { 
                 const imgUrl = result.info.secure_url;
                 document.getElementById('news-image-url').value = imgUrl;
                 document.getElementById('news-image-preview').src = imgUrl;
                 document.getElementById('news-image-preview-container').classList.remove('hidden');
+                showPremiumAlert('¡Éxito!', 'Imagen de noticia subida correctamente.', 'success');
             }
         });
 
@@ -1716,6 +1766,250 @@ async function deleteNews(id) {
             loadAdminData();
         } catch (err) {
             console.error(err);
+        }
+    }
+}
+
+// ==========================================
+// CONTRIBUTORS MANAGEMENT
+// ==========================================
+
+function renderAdminContributors(contributors) {
+    const list = document.getElementById('admin-contributors-list');
+    if (!list) return;
+    list.innerHTML = '';
+
+    contributors.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-white/5 transition-colors group';
+        tr.innerHTML = `
+            <td class="px-6 py-4">
+                <div class="flex items-center gap-3">
+                    <img src="${c.image_url || 'https://via.placeholder.com/150'}" class="w-10 h-10 rounded-full border border-white/10" alt="${c.name}">
+                    <span class="font-medium text-white">${c.name}</span>
+                </div>
+            </td>
+            <td class="px-6 py-4 text-white/70">${c.role}</td>
+            <td class="px-6 py-4">
+                <span class="px-2 py-1 rounded-md bg-white/5 text-white/50 border border-white/10 text-xs font-medium">${c.category}</span>
+            </td>
+            <td class="px-6 py-4 text-white/70">${c.order || 0}</td>
+            <td class="px-6 py-4 text-right">
+                <div class="flex justify-end gap-2">
+                    <button onclick='editContributor(${JSON.stringify(c).replace(/'/g, "&#39;")})' class="p-2 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-all" title="Editar">
+                        <i data-lucide="edit-2" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="deleteContributor(${c.id})" class="p-2 hover:bg-red-500/20 text-red-400 rounded-lg transition-all" title="Eliminar">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </td>
+        `;
+        list.appendChild(tr);
+    });
+    if (window.lucide) window.lucide.createIcons();
+}
+
+function openContributorModal() {
+    document.getElementById('contributor-id').value = '';
+    document.getElementById('contributor-form').reset();
+    document.getElementById('contributor-image-preview-container').classList.add('hidden');
+    document.getElementById('modal-contributor-title').innerText = 'Nuevo Contribuidor';
+    document.getElementById('contributor-modal').classList.remove('hidden');
+}
+
+function closeContributorModal() {
+    document.getElementById('contributor-modal').classList.add('hidden');
+}
+
+function editContributor(c) {
+    document.getElementById('contributor-id').value = c.id;
+    document.getElementById('contributor-name').value = c.name;
+    document.getElementById('contributor-role').value = c.role;
+    document.getElementById('contributor-category').value = c.category;
+    document.getElementById('contributor-order').value = c.order;
+    document.getElementById('contributor-image').value = c.image_url || '';
+    
+    if (c.image_url) {
+        document.getElementById('contributor-image-preview').src = c.image_url;
+        document.getElementById('contributor-image-preview-container').classList.remove('hidden');
+    } else {
+        document.getElementById('contributor-image-preview-container').classList.add('hidden');
+    }
+    
+    document.getElementById('modal-contributor-title').innerText = 'Editar Contribuidor';
+    document.getElementById('contributor-modal').classList.remove('hidden');
+}
+
+function removeContributorImage() {
+    document.getElementById('contributor-image').value = '';
+    document.getElementById('contributor-image-preview-container').classList.add('hidden');
+}
+
+let contributorWidget = null;
+function initContributorCloudinary() {
+    const contributorUploadBtn = document.getElementById('contributor_upload_widget');
+    if (window.cloudinary && contributorUploadBtn && !contributorWidget) {
+        contributorWidget = cloudinary.createUploadWidget({
+            cloudName: CLOUDINARY_CLOUD_NAME,
+            uploadPreset: CLOUDINARY_PRESET,
+            sources: ['local', 'url', 'camera'],
+            multiple: false,
+            language: 'es'
+        }, (error, result) => {
+            if (error) {
+                console.error('Cloudinary Error (Contributor):', error);
+                showPremiumAlert('Error de Subida', 'No se pudo subir la foto del contribuidor.', 'error');
+                return;
+            }
+            if (result && result.event === "success") {
+                const url = result.info.secure_url;
+                document.getElementById('contributor-image').value = url;
+                document.getElementById('contributor-image-preview').src = url;
+                document.getElementById('contributor-image-preview-container').classList.remove('hidden');
+                showPremiumAlert('¡Éxito!', 'Foto de perfil subida correctamente.', 'success');
+            }
+        });
+        contributorUploadBtn.addEventListener('click', () => contributorWidget.open(), false);
+    }
+}
+
+const contributorForm = document.getElementById('contributor-form');
+if (contributorForm) {
+    contributorForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('contributor-id').value;
+        const body = {
+            name: document.getElementById('contributor-name').value,
+            role: document.getElementById('contributor-role').value,
+            category: document.getElementById('contributor-category').value,
+            order: parseInt(document.getElementById('contributor-order').value) || 0,
+            image_url: document.getElementById('contributor-image').value || null
+        };
+
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? `${API_URL}/contributors/${id}` : `${API_URL}/contributors`;
+
+        try {
+            const res = await fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            if (!res.ok) throw new Error('Error saving contributor');
+            
+            Swal.fire({
+                title: '¡Éxito!',
+                text: id ? 'Contribuidor actualizado.' : 'Contribuidor creado con éxito.',
+                icon: 'success',
+                background: '#0a0f1e',
+                color: '#fff'
+            });
+            
+            closeContributorModal();
+            loadAdminData();
+        } catch (err) {
+            console.error(err);
+            Swal.fire('Error', 'No se pudo guardar el contribuidor.', 'error');
+        }
+    });
+}
+
+async function deleteContributor(id) {
+    if (confirm('¿Seguro que deseas eliminar este contribuidor?')) {
+        try {
+            await fetch(`${API_URL}/contributors/${id}`, { method: 'DELETE' });
+            loadAdminData();
+        } catch (err) {
+            console.error(err);
+        }
+    }
+}
+
+// ==========================================
+// PUBLIC ABOUT PAGE RENDERING
+// ==========================================
+
+async function loadAboutPage() {
+    try {
+        console.log('Fetching contributors...');
+        const res = await fetch('/api/contributors');
+        if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+        
+        const contributors = await res.json();
+        console.log('Contributors received:', contributors);
+        
+        const aboutContainer = document.getElementById('view-about');
+        if (!aboutContainer) {
+            console.error('view-about container not found');
+            return;
+        }
+
+        // Cabecera de Contribuidores
+        let html = `
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <div class="text-center mb-16">
+                    <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-6">Nuestros <span class="text-emerald-400">Contribuidores</span></h1>
+                </div>
+        `;
+
+        if (!Array.isArray(contributors) || contributors.length === 0) {
+            console.log('No contributors found in API response');
+            html += `
+                <div class="text-center py-12">
+                    <p class="text-white/40 italic">Todavía no se han agregado contribuidores.</p>
+                </div>
+            `;
+        } else {
+            const categories = [...new Set(contributors.map(c => c.category))];
+            
+            categories.forEach(cat => {
+                const catContributors = contributors.filter(c => c.category === cat);
+                html += `
+                    <div class="mb-20">
+                        <h2 class="text-2xl font-bold text-white mb-8 flex items-center gap-3">
+                            <span class="w-8 h-1 bg-emerald-500 rounded-full"></span>
+                            ${cat || 'Colaboradores'}
+                        </h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+                `;
+
+                catContributors.forEach(c => {
+                    html += `
+                        <div class="glass-card p-6 rounded-3xl border border-white/5 hover:border-emerald-500/30 transition-all duration-300 group">
+                            <div class="flex flex-col items-center text-center">
+                                <div class="relative mb-6">
+                                    <div class="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full blur opacity-10 group-hover:opacity-30 transition-all duration-500"></div>
+                                    <img src="${c.image_url || 'https://via.placeholder.com/150'}" class="relative w-24 h-24 rounded-full object-cover border-2 border-white/10" alt="${c.name}">
+                                </div>
+                                <h3 class="text-lg font-bold text-white mb-1">${c.name}</h3>
+                                <p class="text-emerald-400 text-sm font-medium mb-4 uppercase tracking-wider">${c.role}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        html += `</div>`;
+        aboutContainer.innerHTML = html;
+        console.log('About page rendered successfully');
+
+    } catch (err) {
+        console.error('Error loading about page:', err);
+        const aboutContainer = document.getElementById('view-about');
+        if (aboutContainer) {
+            aboutContainer.innerHTML = `
+                <div class="max-w-4xl mx-auto px-4 py-12 text-center">
+                    <p class="text-red-400 font-bold">Error al cargar la información</p>
+                    <p class="text-white/30 text-xs mt-2">${err.message}</p>
+                </div>
+            `;
         }
     }
 }

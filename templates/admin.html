@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel de Administración - ParticipaRD</title>
+    <link rel="icon" type="image/png" href="/static/img/logo.png">
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -70,6 +71,11 @@
                 class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-white/50 hover:bg-white/5 hover:text-white">
                 <i data-lucide="newspaper" class="w-5 h-5"></i>
                 Noticias
+            </button>
+            <button onclick="switchAdminTab('contributors')" id="tab-contributors"
+                class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-white/50 hover:bg-white/5 hover:text-white">
+                <i data-lucide="users" class="w-5 h-5"></i>
+                Contribuidores
             </button>
         </nav>
 
@@ -352,6 +358,39 @@
             </div>
         </div>
 
+        <!-- Contributors Tab -->
+        <div id="content-contributors" class="admin-tab hidden">
+            <div class="flex justify-between items-center mb-8">
+                <h1 class="text-3xl font-bold">Gestión de Contribuidores</h1>
+                <button onclick="openContributorModal()"
+                    class="flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-lg text-sm font-medium transition-all">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    Nuevo Contribuidor
+                </button>
+            </div>
+
+            <!-- Table -->
+            <div
+                class="glass-panel border border-white/10 rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.05)]">
+                <table class="w-full text-left">
+                    <thead class="bg-white/5 border-b border-white/10">
+                        <tr>
+                            <th class="px-6 py-4 text-xs font-semibold text-white/50 uppercase tracking-wider">NOMBRE</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-white/50 uppercase tracking-wider">ROL</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-white/50 uppercase tracking-wider">CATEGORÍA</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-white/50 uppercase tracking-wider">ORDEN</th>
+                            <th
+                                class="px-6 py-4 text-xs font-semibold text-white/50 uppercase tracking-wider text-right">
+                                ACCIONES</th>
+                        </tr>
+                    </thead>
+                    <tbody id="admin-contributors-list" class="divide-y divide-white/10">
+                        <!-- Llenado via JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </main>
 
     <!-- Modal de Actividad -->
@@ -584,8 +623,84 @@
         </div>
     </div>
 
+        </div>
+    </div>
+
+    <!-- Modal de Contribuidor -->
+    <div id="contributor-modal"
+        class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+        <div
+            class="glass-panel w-full max-w-md border border-white/10 rounded-2xl p-6 shadow-[0_0_50px_rgba(16,185,129,0.15)] relative">
+            <button onclick="closeContributorModal()" class="absolute top-6 right-6 text-white/50 hover:text-white">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h2 id="modal-contributor-title" class="text-2xl font-bold mb-6">Nuevo Contribuidor</h2>
+
+            <form id="contributor-form" class="space-y-4">
+                <input type="hidden" id="contributor-id">
+
+                <div>
+                    <label class="text-xs text-white/70 mb-1 block">Nombre</label>
+                    <input id="contributor-name" required type="text"
+                        class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white">
+                </div>
+
+                <div>
+                    <label class="text-xs text-white/70 mb-1 block">Rol / Cargo</label>
+                    <input id="contributor-role" required type="text"
+                        class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white"
+                        placeholder="Ej. Desarrollador Full-Stack">
+                </div>
+
+                <div>
+                    <label class="text-xs text-white/70 mb-1 block">Categoría</label>
+                    <select id="contributor-category"
+                        class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white">
+                        <option class="bg-[#0a0f1e]" value="Docentes">Docentes</option>
+                        <option class="bg-[#0a0f1e]" value="Equipo Front-End">Equipo Front-End</option>
+                        <option class="bg-[#0a0f1e]" value="Equipo Back-End">Equipo Back-End</option>
+                        <option class="bg-[#0a0f1e]" value="Diseño UI/UX">Diseño UI/UX</option>
+                        <option class="bg-[#0a0f1e]" value="Otros">Otros</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="text-xs text-white/70 mb-1 block">Orden de Visualización</label>
+                    <input id="contributor-order" type="number"
+                        class="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white"
+                        placeholder="Ej. 1">
+                </div>
+
+                <div>
+                    <label class="text-xs text-white/70 mb-1 block">Foto de Perfil (Cloudinary)</label>
+                    <input type="hidden" id="contributor-image">
+                    <div class="flex items-center gap-4 mt-2">
+                        <button type="button" id="contributor_upload_widget"
+                            class="px-4 py-2 bg-white/10 hover:bg-white/20 border border-white/10 rounded-lg text-sm text-white transition-all flex items-center gap-2">
+                            <i data-lucide="image" class="w-4 h-4"></i>
+                            Subir Foto
+                        </button>
+                        <div id="contributor-image-preview-container" class="hidden flex items-center gap-3">
+                            <img id="contributor-image-preview" src="" alt="Vista previa"
+                                class="h-12 w-12 object-cover rounded-full border border-white/20">
+                            <button type="button" onclick="removeContributorImage()"
+                                class="text-xs text-red-400 hover:text-red-300">Quitar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 border-t border-white/10 mt-6">
+                    <button type="button" onclick="closeContributorModal()"
+                        class="px-4 py-2 rounded-lg font-medium text-white/70 hover:text-white hover:bg-white/5">Cancelar</button>
+                    <button type="submit"
+                        class="btn-premium px-6 py-2 rounded-lg font-medium bg-emerald-500 hover:bg-emerald-400 text-white shadow-[0_0_15px_rgba(16,185,129,0.3)]">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Scripts -->
-    <script src="/static/js/main.js?v=20"></script>
+    <script src="/static/js/main.js?v=24"></script>
     <script>
         if (window.lucide) window.lucide.createIcons();
     </script>
