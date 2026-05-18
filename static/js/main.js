@@ -58,10 +58,10 @@ function navigate(page) {
         if (typeof loadAboutPage === 'function') loadAboutPage();
     }
 
-    // Mostrar el footer solo en la página de inicio o noticias
+    // Mostrar el footer solo en la página de inicio
     const footer = document.getElementById('main-footer');
     if (footer) {
-        if (page === 'home' || page === 'news') {
+        if (page === 'home') {
             footer.classList.remove('hidden');
         } else {
             footer.classList.add('hidden');
@@ -593,7 +593,21 @@ function openPublicActivityModal(activityId) {
     
     if (act.official_url) {
         btn.innerHTML = `<i data-lucide="external-link" class="w-5 h-5"></i> Ir al sitio oficial`;
-        btn.onclick = () => window.open(act.official_url, '_blank');
+        btn.onclick = () => {
+            if (!currentUser) {
+                closePublicActivityModal();
+                setTimeout(() => {
+                    toggleAuthModal(true);
+                    const subtitle = document.getElementById('auth-subtitle');
+                    if (subtitle) {
+                        subtitle.innerText = "Debes iniciar sesión para ir al sitio oficial.";
+                        subtitle.classList.add("text-emerald-400");
+                    }
+                }, 200);
+            } else {
+                window.open(act.official_url, '_blank');
+            }
+        };
     } else {
         btn.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5"></i> Inscribirme ahora`;
         btn.onclick = () => enrollActivity(act.id);
@@ -662,6 +676,9 @@ async function loadAdminData() {
         const tabUsersBtn = document.getElementById('tab-users');
         if (tabUsersBtn) tabUsersBtn.classList.add('hidden');
         
+        const tabContribBtn = document.getElementById('tab-contributors');
+        if (tabContribBtn) tabContribBtn.classList.add('hidden');
+        
         const panelTitle = document.getElementById('panel-title');
         if (panelTitle) panelTitle.innerText = 'Editor Panel';
     }
@@ -686,7 +703,21 @@ async function loadAdminData() {
         const news = await newsRes.json();
         const contributors = await contRes.json();
         
-        document.getElementById('stat-users').innerText = users.length;
+        if (currentUser.role === 'Rol_Editores') {
+            const titleEl = document.getElementById('overview-card-1-title');
+            if (titleEl) titleEl.innerText = 'NOTICIAS CREADAS';
+            document.getElementById('stat-users').innerText = news.length;
+            const iconEl = document.getElementById('overview-card-1-icon');
+            if (iconEl) {
+                iconEl.innerHTML = '<i data-lucide="newspaper" class="w-16 h-16"></i>';
+            }
+            const subEl = document.getElementById('overview-card-1-sub');
+            if (subEl) {
+                subEl.innerHTML = '<i data-lucide="bar-chart" class="w-3 h-3"></i> noticias publicadas';
+            }
+        } else {
+            document.getElementById('stat-users').innerText = users.length;
+        }
         document.getElementById('stat-activities').innerText = activities.length;
         
         renderAdminChart(users);
