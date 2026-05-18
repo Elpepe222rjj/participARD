@@ -58,10 +58,10 @@ function navigate(page) {
         if (typeof loadAboutPage === 'function') loadAboutPage();
     }
 
-    // Mostrar el footer solo en la página de inicio o noticias
+    // Mostrar el footer solo en la página de inicio
     const footer = document.getElementById('main-footer');
     if (footer) {
-        if (page === 'home' || page === 'news') {
+        if (page === 'home') {
             footer.classList.remove('hidden');
         } else {
             footer.classList.add('hidden');
@@ -75,6 +75,7 @@ function navigate(page) {
 
 let currentUser = null;
 let isLoginMode = true;
+let isOtpMode = false;
 
 function checkAuth() {
     try {
@@ -143,6 +144,7 @@ function toggleAuthModal(forceLogin = true) {
         modal.classList.toggle('hidden');
         if (!modal.classList.contains('hidden')) {
             isLoginMode = forceLogin;
+            isOtpMode = false;
             updateAuthForm();
             // Reset errors/success when opening
             document.getElementById('auth-error').classList.add('hidden');
@@ -153,10 +155,26 @@ function toggleAuthModal(forceLogin = true) {
 
 function toggleAuthMode() {
     isLoginMode = !isLoginMode;
+    isOtpMode = false;
     updateAuthForm();
 }
 
 function updateAuthForm() {
+    if (isOtpMode) {
+        document.getElementById('auth-title').innerText = 'Verificación de Correo';
+        document.getElementById('auth-subtitle').innerText = 'Ingresa el código que acabamos de enviar a tu correo.';
+        document.getElementById('auth-submit-btn').innerText = 'Verificar y Crear Cuenta';
+        
+        document.getElementById('group-otp').classList.remove('hidden');
+        document.getElementById('auth-otp').setAttribute('required', 'true');
+        
+        document.getElementById('auth-email').setAttribute('readonly', 'true');
+        document.getElementById('auth-name').setAttribute('readonly', 'true');
+        document.getElementById('auth-password').setAttribute('readonly', 'true');
+        document.getElementById('auth-confirm-password').setAttribute('readonly', 'true');
+        return;
+    }
+
     document.getElementById('auth-title').innerText = isLoginMode ? 'Bienvenido de nuevo' : 'Únete a ParticipaRD';
     const subtitle = document.getElementById('auth-subtitle');
     subtitle.innerText = isLoginMode ? 'Ingresa tus credenciales para continuar.' : 'Comienza a transformar tu futuro hoy mismo.';
@@ -164,6 +182,15 @@ function updateAuthForm() {
     
     document.getElementById('auth-submit-btn').innerText = isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta';
     document.getElementById('auth-toggle-text').innerText = isLoginMode ? '¿No tienes cuenta? Regístrate aquí' : '¿Ya tienes cuenta? Inicia sesión aquí';
+    
+    document.getElementById('group-otp').classList.add('hidden');
+    document.getElementById('auth-otp').removeAttribute('required');
+    document.getElementById('auth-otp').value = '';
+    
+    document.getElementById('auth-email').removeAttribute('readonly');
+    document.getElementById('auth-name').removeAttribute('readonly');
+    document.getElementById('auth-password').removeAttribute('readonly');
+    document.getElementById('auth-confirm-password').removeAttribute('readonly');
     
     if (isLoginMode) {
         document.getElementById('group-name').classList.add('hidden');
@@ -258,6 +285,7 @@ if (authForm) {
         const errorContainer = document.getElementById('auth-error');
         const errorMsg = document.getElementById('auth-error-msg');
         const successContainer = document.getElementById('auth-success');
+        const submitBtn = document.getElementById('auth-submit-btn');
         
         errorContainer.classList.add('hidden');
         successContainer.classList.add('hidden');
@@ -266,11 +294,25 @@ if (authForm) {
             showPremiumAlert('Error de Validación', 'Las contraseñas no coinciden. Por favor, verifícalas.', 'error');
             return;
         }
+
+        if (!isLoginMode && !email.toLowerCase().trim().endsWith('@gmail.com')) {
+            showPremiumAlert('Error de Validación', 'Solo se permite el registro con cuentas de correo de @gmail.com.', 'error');
+            return;
+        }
         
-        const endpoint = isLoginMode ? '/auth/login' : '/auth/register';
-        const body = isLoginMode ? { email, password } : { email, password, fullName, role };
+        const code = document.getElementById('auth-otp').value;
+        let endpoint = isLoginMode ? '/auth/login' : '/auth/register';
+        let body = isLoginMode ? { email, password } : { email, password, fullName, role, code };
+        
+        if (!isLoginMode && !isOtpMode) {
+            endpoint = '/auth/request_register';
+            body = { email, password, fullName, role };
+        }
         
         try {
+            submitBtn.classList.add('opacity-50', 'pointer-events-none');
+            submitBtn.innerText = 'Procesando...';
+            
             const res = await fetch(API_URL + endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -278,16 +320,18 @@ if (authForm) {
             });
             const data = await res.json();
             
+            submitBtn.classList.remove('opacity-50', 'pointer-events-none');
+            submitBtn.innerText = isOtpMode ? 'Verificar y Crear Cuenta' : (isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta');
+            
             if (!res.ok) {
                 if (data.lockout) {
                     startLockoutCountdown(data.seconds_remaining);
                     return;
                 }
                 
-                // Show login errors in the inline div for better visibility of attempts
-                if (isLoginMode) {
+                if (isLoginMode || isOtpMode) {
                     errorContainer.classList.remove('hidden');
-                    errorMsg.innerHTML = `<strong>Error de Acceso:</strong><br>${data.error}`;
+                    errorMsg.innerHTML = `<strong>Error:</strong><br>${data.error}`;
                     return;
                 }
                 
@@ -311,11 +355,19 @@ if (authForm) {
                 setTimeout(() => {
                     document.getElementById('auth-modal').classList.add('hidden');
                 }, 2000);
+            } else if (!isLoginMode && !isOtpMode) {
+                isOtpMode = true;
+                updateAuthForm();
+                successContainer.classList.remove('hidden');
+                document.getElementById('auth-success-msg').innerHTML = `<strong>Código enviado</strong><br>Revisa tu correo ${email} (incluyendo SPAM).`;
             } else {
-                showPremiumAlert('¡Registro Exitoso!', 'Tu cuenta ha sido creada. Ahora puedes iniciar sesión con tus credenciales.', 'success');
+                showPremiumAlert('¡Registro Exitoso!', 'Tu cuenta ha sido creada y verificada. Ahora puedes iniciar sesión con tus credenciales.', 'success');
                 toggleAuthMode();
             }
         } catch (err) {
+            submitBtn.classList.remove('opacity-50', 'pointer-events-none');
+            submitBtn.innerText = isOtpMode ? 'Verificar y Crear Cuenta' : (isLoginMode ? 'Iniciar Sesión' : 'Crear Cuenta');
+            
             if (isLoginMode) {
                 errorContainer.classList.remove('hidden');
                 errorMsg.innerHTML = `<strong>Error:</strong> ${err.message}`;
@@ -454,7 +506,7 @@ function renderActivitiesGrid() {
                     </div>
                     <div class="px-2 py-1 rounded ${act.image_url ? 'bg-black/40 backdrop-blur-md border border-white/20 text-white/90' : 'bg-white/5 text-white/50 border border-white/5'} text-xs font-medium flex items-center gap-1">
                         <i data-lucide="map-pin" class="w-3 h-3"></i>
-                        ${act.province}
+                        ${act.location !== 'No especificada' && act.location ? act.location : act.province}
                     </div>
                 </div>
                 <h3 class="text-xl font-extrabold text-white mb-3 group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug">${act.title}</h3>
@@ -547,9 +599,8 @@ function openPublicActivityModal(activityId) {
         return;
     }
 
-    const isEndDateModal = !!act.end_date;
-    const displayDateModal = isEndDateModal ? act.end_date : act.start_date;
-    const dateStr = displayDateModal ? new Date(displayDateModal).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
+    const startDateStr = act.start_date ? new Date(act.start_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
+    const endDateStr = act.end_date ? new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
 
     document.getElementById('public-activity-title').innerText = act.title;
     document.getElementById('public-activity-desc').innerText = act.description;
@@ -560,15 +611,13 @@ function openPublicActivityModal(activityId) {
         typeEl.querySelector('span').innerText = act.type_id || 'Actividad';
     }
     
-    document.getElementById('public-activity-province').innerHTML = act.province;
+    document.getElementById('public-activity-province').innerHTML = act.location !== 'No especificada' && act.location ? act.location : act.province;
     document.getElementById('public-activity-inst').innerText = act.institution_name || 'Desconocida';
-    document.getElementById('public-activity-date').innerText = dateStr;
     
-    // Labels
-    const modalDateLabel = document.getElementById('public-activity-date-label');
-    if (modalDateLabel) {
-        modalDateLabel.innerText = isEndDateModal ? 'Fecha de cierre' : (act.start_date ? 'Fecha de inicio' : 'Fecha');
-    }
+    const startEl = document.getElementById('public-activity-start-date');
+    if (startEl) startEl.innerText = startDateStr;
+    const endEl = document.getElementById('public-activity-end-date');
+    if (endEl) endEl.innerText = endDateStr;
 
     const imgContainer = document.getElementById('public-activity-image-container');
     const imgEl = document.getElementById('public-activity-image');
@@ -593,7 +642,21 @@ function openPublicActivityModal(activityId) {
     
     if (act.official_url) {
         btn.innerHTML = `<i data-lucide="external-link" class="w-5 h-5"></i> Ir al sitio oficial`;
-        btn.onclick = () => window.open(act.official_url, '_blank');
+        btn.onclick = () => {
+            if (!currentUser) {
+                closePublicActivityModal();
+                setTimeout(() => {
+                    toggleAuthModal(true);
+                    const subtitle = document.getElementById('auth-subtitle');
+                    if (subtitle) {
+                        subtitle.innerText = "Debes iniciar sesión para ir al sitio oficial.";
+                        subtitle.classList.add("text-emerald-400");
+                    }
+                }, 200);
+            } else {
+                window.open(act.official_url, '_blank');
+            }
+        };
     } else {
         btn.innerHTML = `<i data-lucide="check-circle" class="w-5 h-5"></i> Inscribirme ahora`;
         btn.onclick = () => enrollActivity(act.id);
@@ -662,6 +725,9 @@ async function loadAdminData() {
         const tabUsersBtn = document.getElementById('tab-users');
         if (tabUsersBtn) tabUsersBtn.classList.add('hidden');
         
+        const tabContribBtn = document.getElementById('tab-contributors');
+        if (tabContribBtn) tabContribBtn.classList.add('hidden');
+        
         const panelTitle = document.getElementById('panel-title');
         if (panelTitle) panelTitle.innerText = 'Editor Panel';
     }
@@ -686,7 +752,21 @@ async function loadAdminData() {
         const news = await newsRes.json();
         const contributors = await contRes.json();
         
-        document.getElementById('stat-users').innerText = users.length;
+        if (currentUser.role === 'Rol_Editores') {
+            const titleEl = document.getElementById('overview-card-1-title');
+            if (titleEl) titleEl.innerText = 'NOTICIAS CREADAS';
+            document.getElementById('stat-users').innerText = news.length;
+            const iconEl = document.getElementById('overview-card-1-icon');
+            if (iconEl) {
+                iconEl.innerHTML = '<i data-lucide="newspaper" class="w-16 h-16"></i>';
+            }
+            const subEl = document.getElementById('overview-card-1-sub');
+            if (subEl) {
+                subEl.innerHTML = '<i data-lucide="bar-chart" class="w-3 h-3"></i> noticias publicadas';
+            }
+        } else {
+            document.getElementById('stat-users').innerText = users.length;
+        }
         document.getElementById('stat-activities').innerText = activities.length;
         
         renderAdminChart(users);
@@ -1370,13 +1450,18 @@ function renderAdminActivitiesTable(activities) {
             else createdTimeLabel = `Hace ${diffDays} días`;
         }
 
+        let startDateString = 'No definida';
+        if (a.start_date) {
+            const startObj = new Date(a.start_date);
+            startDateString = startObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+
+        let endDateString = 'No definida';
         let isClosed = false;
-        let dateString = 'No definida';
-        const displayDateAdmin = a.end_date ? a.end_date : a.start_date;
-        if (displayDateAdmin) {
-            const dateObj = new Date(displayDateAdmin);
-            isClosed = a.end_date ? (dateObj < today) : false;
-            dateString = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+        if (a.end_date) {
+            const endObj = new Date(a.end_date);
+            isClosed = endObj < today;
+            endDateString = endObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
         }
         const typeNormalized = a.type_id.toLowerCase();
         
@@ -1399,8 +1484,11 @@ function renderAdminActivitiesTable(activities) {
                         ${a.type_id}
                     </span>
                 </td>
+                <td class="px-6 py-4 text-sm text-white/80">
+                    ${startDateString}
+                </td>
                 <td class="px-6 py-4 text-sm ${isClosed ? 'text-white/30' : 'text-white/80'}">
-                    ${dateString}
+                    ${endDateString}
                 </td>
                 <td class="px-6 py-4">
                     <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${a.status === 'Activa' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-white/5 text-white/40 border border-white/10'}">
