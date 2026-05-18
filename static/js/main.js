@@ -454,7 +454,7 @@ function renderActivitiesGrid() {
                     </div>
                     <div class="px-2 py-1 rounded ${act.image_url ? 'bg-black/40 backdrop-blur-md border border-white/20 text-white/90' : 'bg-white/5 text-white/50 border border-white/5'} text-xs font-medium flex items-center gap-1">
                         <i data-lucide="map-pin" class="w-3 h-3"></i>
-                        ${act.province}
+                        ${act.location !== 'No especificada' && act.location ? act.location : act.province}
                     </div>
                 </div>
                 <h3 class="text-xl font-extrabold text-white mb-3 group-hover:text-emerald-400 transition-colors line-clamp-2 leading-snug">${act.title}</h3>
@@ -1401,13 +1401,18 @@ function renderAdminActivitiesTable(activities) {
             else createdTimeLabel = `Hace ${diffDays} días`;
         }
 
+        let startDateString = 'No definida';
+        if (a.start_date) {
+            const startObj = new Date(a.start_date);
+            startDateString = startObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+
+        let endDateString = 'No definida';
         let isClosed = false;
-        let dateString = 'No definida';
-        const displayDateAdmin = a.end_date ? a.end_date : a.start_date;
-        if (displayDateAdmin) {
-            const dateObj = new Date(displayDateAdmin);
-            isClosed = a.end_date ? (dateObj < today) : false;
-            dateString = dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+        if (a.end_date) {
+            const endObj = new Date(a.end_date);
+            isClosed = endObj < today;
+            endDateString = endObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
         }
         const typeNormalized = a.type_id.toLowerCase();
         
@@ -1430,8 +1435,11 @@ function renderAdminActivitiesTable(activities) {
                         ${a.type_id}
                     </span>
                 </td>
+                <td class="px-6 py-4 text-sm text-white/80">
+                    ${startDateString}
+                </td>
                 <td class="px-6 py-4 text-sm ${isClosed ? 'text-white/30' : 'text-white/80'}">
-                    ${dateString}
+                    ${endDateString}
                 </td>
                 <td class="px-6 py-4">
                     <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider ${a.status === 'Activa' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-white/5 text-white/40 border border-white/10'}">
