@@ -547,9 +547,8 @@ function openPublicActivityModal(activityId) {
         return;
     }
 
-    const isEndDateModal = !!act.end_date;
-    const displayDateModal = isEndDateModal ? act.end_date : act.start_date;
-    const dateStr = displayDateModal ? new Date(displayDateModal).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
+    const startDateStr = act.start_date ? new Date(act.start_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
+    const endDateStr = act.end_date ? new Date(act.end_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Fecha no definida';
 
     document.getElementById('public-activity-title').innerText = act.title;
     document.getElementById('public-activity-desc').innerText = act.description;
@@ -560,15 +559,13 @@ function openPublicActivityModal(activityId) {
         typeEl.querySelector('span').innerText = act.type_id || 'Actividad';
     }
     
-    document.getElementById('public-activity-province').innerHTML = act.province;
+    document.getElementById('public-activity-province').innerHTML = act.location !== 'No especificada' && act.location ? act.location : act.province;
     document.getElementById('public-activity-inst').innerText = act.institution_name || 'Desconocida';
-    document.getElementById('public-activity-date').innerText = dateStr;
     
-    // Labels
-    const modalDateLabel = document.getElementById('public-activity-date-label');
-    if (modalDateLabel) {
-        modalDateLabel.innerText = isEndDateModal ? 'Fecha de cierre' : (act.start_date ? 'Fecha de inicio' : 'Fecha');
-    }
+    const startEl = document.getElementById('public-activity-start-date');
+    if (startEl) startEl.innerText = startDateStr;
+    const endEl = document.getElementById('public-activity-end-date');
+    if (endEl) endEl.innerText = endDateStr;
 
     const imgContainer = document.getElementById('public-activity-image-container');
     const imgEl = document.getElementById('public-activity-image');
